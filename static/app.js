@@ -8,6 +8,7 @@ let generating = false;
 let currentMode = "direct";
 let currentEngine = "sadtalker";
 let currentCategory = null;
+let currentVideoUrl = null;
 let voiceLabels = {};
 
 function toast(msg, ms = 3000) {
@@ -165,6 +166,7 @@ async function generate() {
     placeholder.classList.add("hidden");
     llmBox.classList.add("hidden");
     timeBadge.classList.add("hidden");
+    $("#download-btn").classList.add("hidden");
 
     const t0 = Date.now();
     const timer = setInterval(() => {
@@ -211,12 +213,14 @@ async function generate() {
         const url = URL.createObjectURL(blob);
         if (video.src && video.src.startsWith("blob:")) URL.revokeObjectURL(video.src);
 
+        currentVideoUrl = url;
         video.src = url;
         video.classList.add("visible");
         video.play().catch(() => {});
 
         timeBadge.textContent = elapsed + "s";
         timeBadge.classList.remove("hidden");
+        $("#download-btn").classList.remove("hidden");
 
         $("#text-input").value = "";
         toast("生成完成 " + elapsed + "s");
@@ -320,6 +324,19 @@ ta.addEventListener("keydown", (e) => {
     }
 });
 $("#send-btn").addEventListener("click", generate);
+
+// Download button
+$("#download-btn").addEventListener("click", () => {
+    if (!currentVideoUrl) return;
+    const a = document.createElement("a");
+    a.href = currentVideoUrl;
+    const name = avatarData[selectedAvatar]?.name || "digital-human";
+    const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+    a.download = name + "_" + ts + ".mp4";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+});
 
 // Hamburger menu (mobile)
 (() => {
