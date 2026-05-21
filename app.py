@@ -108,6 +108,23 @@ VOICE_LABELS = {
 
 app = FastAPI(title="数字人直播系统")
 
+# Global connection-pooled HTTP clients (created at startup, closed at shutdown)
+dh_client: httpx.AsyncClient = None  # type: ignore[assignment]
+tts_client: httpx.AsyncClient = None  # type: ignore[assignment]
+
+
+@app.on_event("startup")
+async def _startup():
+    global dh_client, tts_client
+    dh_client = httpx.AsyncClient(timeout=httpx.Timeout(300.0))
+    tts_client = httpx.AsyncClient(timeout=60.0)
+
+
+@app.on_event("shutdown")
+async def _shutdown():
+    await dh_client.aclose()
+    await tts_client.aclose()
+
 
 def _load_meta() -> dict:
     if META_FILE.exists():
@@ -227,12 +244,11 @@ async def delete_avatar(avatar_id: str):
 
 
 async def _openai_tts(text: str, voice: str) -> bytes:
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(
-            OPENAI_TTS_URL,
-            headers={"Authorization": f"Bearer {OPENAI_KEY}"},
-            json={"model": "tts-1-hd", "input": text, "voice": voice},
-        )
+    resp = await tts_client.post(
+        OPENAI_TTS_URL,
+        headers={"Authorization": f"Bearer {OPENAI_KEY}"},
+        json={"model": "tts-1-hd", "input": text, "voice": voice},
+    )
     if resp.status_code != 200:
         raise HTTPException(502, f"TTS错误: {resp.text}")
     return resp.content
@@ -240,10 +256,9 @@ async def _openai_tts(text: str, voice: str) -> bytes:
 
 @app.post("/api/chat")
 async def chat_proxy(message: str = Form(...)):
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(
-            f"{DH_API}/api/chat", data={"message": message, "model": "qwen3.6:27b"},
-        )
+    resp = await dh_client.post(
+        f"{DH_API}/api/chat", data={"message": message, "model": "qwen3.6:27b"},
+    )
     if resp.status_code != 200:
         raise HTTPException(502, f"LLM错误: {resp.text}")
     return resp.json()
@@ -292,16 +307,15 @@ async def generate(
         af.write(audio_bytes)
         audio_path = Path(af.name)
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            with open(image_path, "rb") as img_f, open(audio_path, "rb") as aud_f:
-                resp = await client.post(
-                    f"{DH_API}/api/generate",
-                    files={
-                        "image": (image_path.name, img_f, "image/png"),
-                        "audio": ("speech.mp3", aud_f, "audio/mpeg"),
-                    },
-                    data={"engine": engine},
-                )
+        with open(image_path, "rb") as img_f, open(audio_path, "rb") as aud_f:
+            resp = await dh_client.post(
+                f"{DH_API}/api/generate",
+                files={
+                    "image": (image_path.name, img_f, "image/png"),
+                    "audio": ("speech.mp3", aud_f, "audio/mpeg"),
+                },
+                data={"engine": engine},
+            )
     finally:
         audio_path.unlink(missing_ok=True)
     if resp.status_code != 200:
@@ -328,10 +342,9 @@ async def ai_talk(
     if not image_path or not image_path.exists():
         raise HTTPException(404, "角色不存在")
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        llm_resp = await client.post(
-            f"{DH_API}/api/chat", data={"message": message, "model": "qwen3.6:27b"},
-        )
+    llm_resp = await dh_client.post(
+        f"{DH_API}/api/chat", data={"message": message, "model": "qwen3.6:27b"},
+    )
     if llm_resp.status_code != 200:
         raise HTTPException(502, f"LLM错误: {llm_resp.text}")
 
@@ -348,16 +361,15 @@ async def ai_talk(
         af.write(audio_bytes)
         audio_path = Path(af.name)
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            with open(image_path, "rb") as img_f, open(audio_path, "rb") as aud_f:
-                resp = await client.post(
-                    f"{DH_API}/api/generate",
-                    files={
-                        "image": (image_path.name, img_f, "image/png"),
-                        "audio": ("speech.mp3", aud_f, "audio/mpeg"),
-                    },
-                    data={"engine": engine},
-                )
+        with open(image_path, "rb") as img_f, open(audio_path, "rb") as aud_f:
+            resp = await dh_client.post(
+                f"{DH_API}/api/generate",
+                files={
+                    "image": (image_path.name, img_f, "image/png"),
+                    "audio": ("speech.mp3", aud_f, "audio/mpeg"),
+                },
+                data={"engine": engine},
+            )
     finally:
         audio_path.unlink(missing_ok=True)
     if resp.status_code != 200:
@@ -373,8 +385,7 @@ async def ai_talk(
 @app.get("/api/services")
 async def services_proxy():
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{DH_API}/api/services")
+        resp = await dh_client.get(f"{DH_API}/api/services")
         return resp.json()
     except Exception:
         return {"error": "API unreachable"}
@@ -382,9 +393,8 @@ async def services_proxy():
 @app.get("/api/health")
 async def health():
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{DH_API}/health")
-            dh_status = resp.json()
+        resp = await dh_client.get(f"{DH_API}/health")
+        dh_status = resp.json()
     except Exception:
         dh_status = {"status": "unreachable"}
     return {"status": "ok", "digital_human_api": dh_status}
