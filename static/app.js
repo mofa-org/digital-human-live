@@ -79,7 +79,7 @@ function renderAvatars() {
         card.className = "avatar-card" + (selectedAvatar === a.id ? " active" : "");
         card.title = a.desc || a.name;
         card.innerHTML = `
-            <img src="/api/avatars/${a.id}/image" alt="${a.name}" loading="lazy">
+            <img src="/api/avatars/${a.id}/thumbnail" alt="${a.name}" loading="lazy">
             <span class="avatar-name">${a.name}</span>
         `;
         card.addEventListener("click", () => {

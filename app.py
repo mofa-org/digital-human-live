@@ -10,6 +10,7 @@ import imageio_ffmpeg
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from starlette.middleware.base import BaseHTTPMiddleware
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
@@ -18,6 +19,8 @@ BASE = Path(__file__).parent
 AVATARS_DIR = BASE / "avatars"
 UPLOADS_DIR = BASE / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
+THUMBNAILS_DIR = BASE / "thumbnails"
+THUMBNAILS_DIR.mkdir(exist_ok=True)
 META_FILE = UPLOADS_DIR / "metadata.json"
 
 DH_API = "http://154.17.17.154:18801"
@@ -160,6 +163,35 @@ async def get_avatar_image(avatar_id: str):
         if path.exists():
             return FileResponse(path)
     raise HTTPException(404, "角色不存在")
+
+
+def _make_thumbnail(source_path: Path, avatar_id: str) -> Path:
+    """Create a 128x128 WebP thumbnail, cached in THUMBNAILS_DIR."""
+    thumb_path = THUMBNAILS_DIR / f"{avatar_id}.webp"
+    if thumb_path.exists() and thumb_path.stat().st_mtime >= source_path.stat().st_mtime:
+        return thumb_path
+    with Image.open(source_path) as img:
+        img = img.convert("RGB")
+        img.thumbnail((128, 128), Image.LANCZOS)
+        img.save(thumb_path, "WEBP", quality=80)
+    return thumb_path
+
+
+@app.get("/api/avatars/{avatar_id}/thumbnail")
+async def get_avatar_thumbnail(avatar_id: str):
+    source_path = None
+    p = _find_preset(avatar_id)
+    if p:
+        source_path = AVATARS_DIR / p["file"]
+    else:
+        meta = _load_meta()
+        if avatar_id in meta:
+            source_path = UPLOADS_DIR / meta[avatar_id]["file"]
+    if not source_path or not source_path.exists():
+        raise HTTPException(404, "角色不存在")
+    thumb_path = _make_thumbnail(source_path, avatar_id)
+    return FileResponse(thumb_path, media_type="image/webp")
+
 
 @app.post("/api/avatars/upload")
 async def upload_avatar(
