@@ -1,6 +1,24 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 
+/**
+ * Fetch with one automatic retry on network errors (not HTTP errors).
+ * Shows a toast during the retry wait.
+ */
+async function fetchWithRetry(url, options = {}) {
+    try {
+        return await fetch(url, options);
+    } catch (err) {
+        if (err instanceof TypeError) {
+            // Network error — retry once after 2s
+            toast("网络波动，正在重试...", 2500);
+            await new Promise((r) => setTimeout(r, 2000));
+            return await fetch(url, options);
+        }
+        throw err;
+    }
+}
+
 let selectedAvatar = null;
 let avatarData = {};
 let allAvatars = [];
@@ -33,7 +51,7 @@ async function loadVoices() {
 
 async function loadCategories() {
     try {
-        const r = await fetch("/api/categories");
+        const r = await fetchWithRetry("/api/categories");
         if (!r.ok) return;
         const cats = await r.json();
         const container = $("#category-filter");
@@ -95,7 +113,7 @@ function renderAvatars() {
 
 async function loadAvatars() {
     try {
-        const r = await fetch("/api/avatars");
+        const r = await fetchWithRetry("/api/avatars");
         if (!r.ok) return;
         allAvatars = await r.json();
         allAvatars.forEach((a) => { avatarData[a.id] = a; });
@@ -183,7 +201,7 @@ async function generate() {
             loadingText.textContent = "AI 思考中...";
             const chatForm = new FormData();
             chatForm.append("message", text);
-            const chatResp = await fetch("/api/chat", { method: "POST", body: chatForm });
+            const chatResp = await fetchWithRetry("/api/chat", { method: "POST", body: chatForm });
             if (!chatResp.ok) throw new Error("AI 服务暂时不可用，请稍后重试");
             const chatData = await chatResp.json();
             const msg = chatData.message;
@@ -200,7 +218,7 @@ async function generate() {
         form.append("engine", currentEngine);
         form.append("text", spokenText);
 
-        const resp = await fetch("/api/generate", { method: "POST", body: form });
+        const resp = await fetchWithRetry("/api/generate", { method: "POST", body: form });
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
         if (!resp.ok) {
