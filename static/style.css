@@ -292,6 +292,25 @@ body {
 }
 .badge.hidden { display: none; }
 
+/* ── Download button ── */
+.download-btn {
+    position: absolute;
+    bottom: 10px; right: 10px;
+    width: 36px; height: 36px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center; justify-content: center;
+    box-shadow: var(--shadow2);
+    z-index: 5;
+    transition: background 0.15s, transform 0.15s;
+}
+.download-btn:hover { background: #b06e42; transform: scale(1.08); }
+.download-btn.hidden { display: none; }
+
 /* ── LLM box ── */
 .llm-box {
     max-width: 460px; width: 100%;
