@@ -275,6 +275,35 @@ ta.addEventListener("keydown", (e) => {
 });
 $("#send-btn").addEventListener("click", generate);
 
+// Hamburger menu (mobile)
+(() => {
+    const hamburger = $("#hamburger");
+    const sidebar = $("#sidebar");
+    const overlay = $("#sidebar-overlay");
+    if (!hamburger || !sidebar) return;
+
+    function openSidebar() {
+        sidebar.classList.add("open");
+        overlay.classList.add("open");
+    }
+    function closeSidebar() {
+        sidebar.classList.remove("open");
+        overlay.classList.remove("open");
+    }
+
+    hamburger.addEventListener("click", () => {
+        sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    });
+    overlay.addEventListener("click", closeSidebar);
+
+    // Close sidebar when avatar is selected (mobile convenience)
+    document.addEventListener("click", (e) => {
+        if (e.target.closest(".avatar-card") && window.innerWidth < 768) {
+            setTimeout(closeSidebar, 150);
+        }
+    });
+})();
+
 // Init
 (async () => {
     await loadVoices();
