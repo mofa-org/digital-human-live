@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数字人直播</title>
+    <link rel="stylesheet" href="style.css?v=8">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="app">
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+            </div>
+            <span>数字人直播</span>
+        </div>
+
+        <div class="section">
+            <div class="section-label">选择角色</div>
+            <div id="avatar-list" class="avatar-grid"></div>
+        </div>
+
+        <button id="upload-btn" class="upload-btn">+ 上传自定义角色</button>
+        <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" hidden>
+
+        <div class="section">
+            <div class="section-label">生成引擎</div>
+            <div class="engine-row">
+                <label class="engine-option active" data-engine="sadtalker">
+                    <input type="radio" name="engine" value="sadtalker" checked>
+                    <span class="engine-name">SadTalker</span>
+                    <span class="engine-desc">快速 ~10s</span>
+                </label>
+                <label class="engine-option" data-engine="musetalk">
+                    <input type="radio" name="engine" value="musetalk">
+                    <span class="engine-name">MuseTalk</span>
+                    <span class="engine-desc">高品质唇形</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="sidebar-status">
+            <span id="api-status" class="dot"></span>
+            <span id="api-status-text">检查服务...</span>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="tabs">
+            <button class="tab active" data-mode="direct">自由输入</button>
+            <button class="tab" data-mode="ai">AI 对话</button>
+        </div>
+
+        <div class="stage">
+            <div class="video-wrap">
+                <video id="video-player" controls autoplay playsinline></video>
+                <div id="placeholder" class="placeholder">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+                    <p>选择一个角色，输入文字</p>
+                    <p class="sub">数字人会开口说话</p>
+                </div>
+                <div id="loading" class="loading hidden">
+                    <div class="pulse"></div>
+                    <p id="loading-text">生成中...</p>
+                </div>
+                <span id="time-badge" class="badge hidden"></span>
+            </div>
+
+            <div id="llm-box" class="llm-box hidden"></div>
+
+            <div id="samples" class="samples hidden">
+                <div class="samples-label" id="samples-label">推荐台词</div>
+                <div id="samples-list" class="samples-list"></div>
+            </div>
+        </div>
+
+        <div class="input-bar">
+            <textarea id="text-input" placeholder="输入要说的话...（Enter 发送）" rows="1"></textarea>
+            <button id="send-btn" disabled>请先选角色</button>
+        </div>
+    </main>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js?v=8"></script>
+</body>
+</html>

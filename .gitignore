@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+uploads/
+node_modules/
+.DS_Store
+server.log
+package*.json
+test_e2e.*
