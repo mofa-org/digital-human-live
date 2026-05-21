@@ -9,6 +9,8 @@ let currentMode = "direct";
 let currentEngine = "sadtalker";
 let currentCategory = null;
 let currentVideoUrl = null;
+let videoHistory = [];  // {url, characterName, text, timestamp}
+const MAX_HISTORY = 5;
 let voiceLabels = {};
 
 function toast(msg, ms = 3000) {
@@ -222,6 +224,8 @@ async function generate() {
         timeBadge.classList.remove("hidden");
         $("#download-btn").classList.remove("hidden");
 
+        addToHistory(url, avatarData[selectedAvatar]?.name || selectedAvatar, spokenText);
+
         $("#text-input").value = "";
         toast("生成完成 " + elapsed + "s");
     } catch (e) {
@@ -324,6 +328,54 @@ ta.addEventListener("keydown", (e) => {
     }
 });
 $("#send-btn").addEventListener("click", generate);
+
+// History management
+function addToHistory(url, characterName, text) {
+    videoHistory.unshift({
+        url,
+        characterName,
+        text: text.length > 30 ? text.slice(0, 30) + "..." : text,
+        timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+    });
+    if (videoHistory.length > MAX_HISTORY) {
+        const removed = videoHistory.pop();
+        URL.revokeObjectURL(removed.url);
+    }
+    renderHistory();
+}
+
+function renderHistory() {
+    const panel = $("#history-panel");
+    const list = $("#history-list");
+    if (!panel || !list) return;
+    if (videoHistory.length === 0) {
+        panel.classList.add("hidden");
+        return;
+    }
+    panel.classList.remove("hidden");
+    list.innerHTML = "";
+    videoHistory.forEach((item, idx) => {
+        const el = document.createElement("div");
+        el.className = "history-item" + (item.url === currentVideoUrl ? " active" : "");
+        el.innerHTML = `
+            <video src="${item.url}" muted preload="metadata"></video>
+            <div class="history-meta">${item.characterName} ${item.timestamp}</div>
+        `;
+        el.addEventListener("click", () => {
+            const video = $("#video-player");
+            const placeholder = $("#placeholder");
+            currentVideoUrl = item.url;
+            video.src = item.url;
+            video.classList.add("visible");
+            placeholder.classList.add("hidden");
+            video.play().catch(() => {});
+            $("#download-btn").classList.remove("hidden");
+            $$(".history-item").forEach((h) => h.classList.remove("active"));
+            el.classList.add("active");
+        });
+        list.appendChild(el);
+    });
+}
 
 // Download button
 $("#download-btn").addEventListener("click", () => {
