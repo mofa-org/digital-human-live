@@ -150,18 +150,21 @@ async def list_avatars():
         })
     return result
 
+_CDN_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
+
+
 @app.get("/api/avatars/{avatar_id}/image")
 async def get_avatar_image(avatar_id: str):
     p = _find_preset(avatar_id)
     if p:
         path = AVATARS_DIR / p["file"]
         if path.exists():
-            return FileResponse(path, media_type="image/png")
+            return FileResponse(path, media_type="image/png", headers=_CDN_CACHE_HEADERS)
     meta = _load_meta()
     if avatar_id in meta:
         path = UPLOADS_DIR / meta[avatar_id]["file"]
         if path.exists():
-            return FileResponse(path)
+            return FileResponse(path, headers=_CDN_CACHE_HEADERS)
     raise HTTPException(404, "角色不存在")
 
 
@@ -190,7 +193,7 @@ async def get_avatar_thumbnail(avatar_id: str):
     if not source_path or not source_path.exists():
         raise HTTPException(404, "角色不存在")
     thumb_path = _make_thumbnail(source_path, avatar_id)
-    return FileResponse(thumb_path, media_type="image/webp")
+    return FileResponse(thumb_path, media_type="image/webp", headers=_CDN_CACHE_HEADERS)
 
 
 @app.post("/api/avatars/upload")
