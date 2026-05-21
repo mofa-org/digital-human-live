@@ -60,6 +60,32 @@ body {
     letter-spacing: 0.8px;
 }
 
+/* ── Category filter ── */
+.category-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+.category-chip {
+    padding: 4px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    font-size: 0.65rem;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+    white-space: nowrap;
+}
+.category-chip:hover { border-color: var(--accent); color: var(--accent); }
+.category-chip.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
 /* ── Avatar grid ── */
 .avatar-grid {
     display: grid;

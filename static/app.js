@@ -3,9 +3,11 @@ const $$ = (s) => document.querySelectorAll(s);
 
 let selectedAvatar = null;
 let avatarData = {};
+let allAvatars = [];
 let generating = false;
 let currentMode = "direct";
 let currentEngine = "sadtalker";
+let currentCategory = null;
 let voiceLabels = {};
 
 function toast(msg, ms = 3000) {
@@ -26,31 +28,75 @@ async function loadVoices() {
     } catch {}
 }
 
+async function loadCategories() {
+    try {
+        const r = await fetch("/api/categories");
+        if (!r.ok) return;
+        const cats = await r.json();
+        const container = $("#category-filter");
+        if (!container) return;
+        container.innerHTML = "";
+
+        const allChip = document.createElement("button");
+        allChip.className = "category-chip active";
+        allChip.textContent = "全部";
+        allChip.addEventListener("click", () => {
+            currentCategory = null;
+            $$(".category-chip").forEach((c) => c.classList.remove("active"));
+            allChip.classList.add("active");
+            renderAvatars();
+        });
+        container.appendChild(allChip);
+
+        cats.forEach((cat) => {
+            const chip = document.createElement("button");
+            chip.className = "category-chip";
+            chip.textContent = cat;
+            chip.addEventListener("click", () => {
+                currentCategory = cat;
+                $$(".category-chip").forEach((c) => c.classList.remove("active"));
+                chip.classList.add("active");
+                renderAvatars();
+            });
+            container.appendChild(chip);
+        });
+    } catch (e) {
+        console.error("loadCategories:", e);
+    }
+}
+
+function renderAvatars() {
+    const list = $("#avatar-list");
+    list.innerHTML = "";
+    const filtered = currentCategory
+        ? allAvatars.filter((a) => a.category === currentCategory)
+        : allAvatars;
+    filtered.forEach((a) => {
+        const card = document.createElement("div");
+        card.className = "avatar-card" + (selectedAvatar === a.id ? " active" : "");
+        card.title = a.desc || a.name;
+        card.innerHTML = `
+            <img src="/api/avatars/${a.id}/image" alt="${a.name}" loading="lazy">
+            <span class="avatar-name">${a.name}</span>
+        `;
+        card.addEventListener("click", () => {
+            selectedAvatar = a.id;
+            $$(".avatar-card").forEach((c) => c.classList.remove("active"));
+            card.classList.add("active");
+            showSamples(a);
+            updateUI();
+        });
+        list.appendChild(card);
+    });
+}
+
 async function loadAvatars() {
     try {
         const r = await fetch("/api/avatars");
         if (!r.ok) return;
-        const avatars = await r.json();
-        const list = $("#avatar-list");
-        list.innerHTML = "";
-        avatars.forEach((a) => {
-            avatarData[a.id] = a;
-            const card = document.createElement("div");
-            card.className = "avatar-card" + (selectedAvatar === a.id ? " active" : "");
-            card.title = a.desc || a.name;
-            card.innerHTML = `
-                <img src="/api/avatars/${a.id}/image" alt="${a.name}" loading="lazy">
-                <span class="avatar-name">${a.name}</span>
-            `;
-            card.addEventListener("click", () => {
-                selectedAvatar = a.id;
-                $$(".avatar-card").forEach((c) => c.classList.remove("active"));
-                card.classList.add("active");
-                showSamples(a);
-                updateUI();
-            });
-            list.appendChild(card);
-        });
+        allAvatars = await r.json();
+        allAvatars.forEach((a) => { avatarData[a.id] = a; });
+        renderAvatars();
     } catch (e) {
         console.error("loadAvatars:", e);
     }
@@ -307,6 +353,7 @@ $("#send-btn").addEventListener("click", generate);
 // Init
 (async () => {
     await loadVoices();
+    await loadCategories();
     await loadAvatars();
     checkHealth();
     updateUI();
