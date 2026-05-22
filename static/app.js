@@ -10,7 +10,6 @@ async function fetchWithRetry(url, options = {}) {
         return await fetch(url, options);
     } catch (err) {
         if (err instanceof TypeError) {
-            // Network error — retry once after 2s
             toast("网络波动，正在重试...", 2500);
             await new Promise((r) => setTimeout(r, 2000));
             return await fetch(url, options);
@@ -27,10 +26,22 @@ let currentMode = "direct";
 let currentEngine = "sadtalker";
 let currentCategory = null;
 let currentVideoUrl = null;
-let videoHistory = [];  // {url, characterName, text, timestamp}
+let videoHistory = [];
 const MAX_HISTORY = 5;
 let voiceLabels = {};
+let hasGeneratedVideo = false;
 
+/* ── Scene template configs ── */
+const SCENE_CONFIGS = {
+    news:   { avatarId: "news_anchor",       text: "观众朋友们好，欢迎收看今天的新闻播报", mode: "direct" },
+    teach:  { avatarId: "retired_professor",  text: "让我们来了解一下中国古代四大发明",      mode: "direct" },
+    health: { avatarId: "doctor_li",          text: "今天给大家讲讲预防感冒的小知识",        mode: "direct" },
+    story:  { avatarId: "grandma_chen",       text: "孩子们，奶奶给你们讲一个很久以前的故事", mode: "direct" },
+    cook:   { avatarId: "chef_wang",          text: "今天教大家做一道家常红烧肉",            mode: "direct" },
+    ai:     { avatarId: "tech_engineer",      text: "用简单的话解释什么是人工智能",          mode: "ai" },
+};
+
+/* ── Toast ── */
 function toast(msg, ms = 3000) {
     const el = $("#toast");
     el.textContent = msg;
@@ -42,6 +53,7 @@ function toast(msg, ms = 3000) {
     }, ms);
 }
 
+/* ── Load voices ── */
 async function loadVoices() {
     try {
         const r = await fetch("/api/voices");
@@ -49,6 +61,7 @@ async function loadVoices() {
     } catch {}
 }
 
+/* ── Load categories ── */
 async function loadCategories() {
     try {
         const r = await fetchWithRetry("/api/categories");
@@ -86,6 +99,7 @@ async function loadCategories() {
     }
 }
 
+/* ── Render avatars (3-col grid with tags) ── */
 function renderAvatars() {
     const list = $("#avatar-list");
     list.innerHTML = "";
@@ -96,21 +110,50 @@ function renderAvatars() {
         const card = document.createElement("div");
         card.className = "avatar-card" + (selectedAvatar === a.id ? " active" : "");
         card.title = a.desc || a.name;
+        const tagHtml = a.category ? `<span class="avatar-tag">${a.category}</span>` : "";
         card.innerHTML = `
             <img src="/api/avatars/${a.id}/thumbnail" alt="${a.name}" loading="lazy">
             <span class="avatar-name">${a.name}</span>
+            ${tagHtml}
         `;
-        card.addEventListener("click", () => {
-            selectedAvatar = a.id;
-            $$(".avatar-card").forEach((c) => c.classList.remove("active"));
-            card.classList.add("active");
-            showSamples(a);
-            updateUI();
-        });
+        card.addEventListener("click", () => selectAvatar(a.id));
         list.appendChild(card);
     });
 }
 
+/* ── Select avatar (shared logic) ── */
+function selectAvatar(avatarId) {
+    selectedAvatar = avatarId;
+    $$(".avatar-card").forEach((c) => c.classList.remove("active"));
+    // Find and activate the matching card
+    const cards = $$(".avatar-card");
+    const filtered = currentCategory
+        ? allAvatars.filter((a) => a.category === currentCategory)
+        : allAvatars;
+    filtered.forEach((a, i) => {
+        if (a.id === avatarId && cards[i]) cards[i].classList.add("active");
+    });
+
+    const a = avatarData[avatarId];
+    if (a) {
+        showAvatarInfo(a);
+        showSamples(a);
+    }
+    updateUI();
+}
+
+/* ── Avatar info banner ── */
+function showAvatarInfo(a) {
+    const info = $("#avatar-info");
+    if (!info) return;
+    $("#info-avatar-img").src = `/api/avatars/${a.id}/image`;
+    $("#info-avatar-name").textContent = a.name;
+    $("#info-avatar-desc").textContent = a.desc || "";
+    $("#info-avatar-voice").textContent = voiceLabels[a.voice] || a.voice;
+    info.classList.remove("hidden");
+}
+
+/* ── Load avatars ── */
 async function loadAvatars() {
     try {
         const r = await fetchWithRetry("/api/avatars");
@@ -123,6 +166,7 @@ async function loadAvatars() {
     }
 }
 
+/* ── Samples ── */
 function showSamples(a) {
     const panel = $("#samples");
     const label = $("#samples-label");
@@ -141,6 +185,7 @@ function showSamples(a) {
         chip.textContent = s;
         chip.addEventListener("click", () => {
             $("#text-input").value = s;
+            updateCharCount();
             updateUI();
             $("#text-input").focus();
         });
@@ -149,6 +194,21 @@ function showSamples(a) {
     panel.classList.remove("hidden");
 }
 
+/* ── Character counter ── */
+function updateCharCount() {
+    const ta = $("#text-input");
+    const counter = $("#char-count");
+    const len = ta.value.length;
+    counter.textContent = `${len}/300`;
+    counter.classList.remove("warn", "error");
+    if (len >= 300) {
+        counter.classList.add("error");
+    } else if (len >= 250) {
+        counter.classList.add("warn");
+    }
+}
+
+/* ── Update UI state ── */
 function updateUI() {
     const text = $("#text-input").value.trim();
     const btn = $("#send-btn");
@@ -160,15 +220,33 @@ function updateUI() {
         btn.textContent = "请先选角色";
     } else if (!text) {
         btn.disabled = true;
-        btn.textContent = currentMode === "quick" ? "请输入问题" : (currentMode === "ai" ? "请输入问题" : "请输入文字");
+        btn.textContent = currentMode === "ai" ? "请输入问题" : "请输入文字";
     } else {
         btn.disabled = false;
-        btn.textContent = currentMode === "quick" ? "极速生成" : (currentMode === "ai" ? "提问" : "生成");
+        btn.textContent = currentMode === "ai" ? "提问" : "生成";
     }
-    const previewBtn = $("#preview-voice-btn");
-    if (previewBtn) previewBtn.disabled = !selectedAvatar;
 }
 
+/* ── Step progress helper ── */
+function setStep(stepIndex) {
+    // Steps: 0=AI thinking (optional), 1=TTS, 2=Video, 3=Transcode (not always shown)
+    // We use 3 dots: dot-0, dot-1, dot-2 and 2 lines: line-0, line-1
+    for (let i = 0; i < 3; i++) {
+        const dot = $(`#step-dot-${i}`);
+        const line = i < 2 ? $(`#step-line-${i}`) : null;
+        dot.classList.remove("active", "done");
+        if (line) line.classList.remove("done");
+
+        if (i < stepIndex) {
+            dot.classList.add("done");
+            if (line) line.classList.add("done");
+        } else if (i === stepIndex) {
+            dot.classList.add("active");
+        }
+    }
+}
+
+/* ── Generate ── */
 async function generate() {
     if (!selectedAvatar || generating) return;
     const text = $("#text-input").value.trim();
@@ -179,8 +257,10 @@ async function generate() {
 
     const loading = $("#loading");
     const loadingText = $("#loading-text");
+    const loadingTimer = $("#loading-timer");
     const placeholder = $("#placeholder");
     const video = $("#video-player");
+    const videoWrap = $("#video-wrap");
     const llmBox = $("#llm-box");
     const timeBadge = $("#time-badge");
 
@@ -190,50 +270,52 @@ async function generate() {
     timeBadge.classList.add("hidden");
     $("#download-btn").classList.add("hidden");
 
+    // Reset steps
+    setStep(0);
+
     const t0 = Date.now();
     const timer = setInterval(() => {
         const s = Math.floor((Date.now() - t0) / 1000);
-        loadingText.textContent = (currentMode === "ai" ? "AI 思考 + 生成 " : "生成中 ") + s + "s";
+        loadingTimer.textContent = s + "s";
     }, 1000);
 
-    try {
-        let resp;
+    let spokenText = text;
 
-        if (currentMode === "quick") {
-            loadingText.textContent = "极速全链路生成中...";
-            const form = new FormData();
-            form.append("message", text);
-            form.append("avatar_id", selectedAvatar);
-            form.append("engine", currentEngine);
-            resp = await fetchWithRetry("/api/quick-talk", { method: "POST", body: form });
-            const llmText = resp.headers.get("X-LLM-Response");
-            if (llmText) {
-                llmBox.textContent = llmText;
-                llmBox.classList.remove("hidden");
-            }
-        } else {
-            let spokenText = text;
-            if (currentMode === "ai") {
-                loadingText.textContent = "AI 思考中...";
-                const chatForm = new FormData();
-                chatForm.append("message", text);
-                const chatResp = await fetchWithRetry("/api/chat", { method: "POST", body: chatForm });
-                if (!chatResp.ok) throw new Error("AI 服务暂时不可用，请稍后重试");
-                const chatData = await chatResp.json();
-                const msg = chatData.message;
-                spokenText = (typeof msg === "object" ? msg.content : msg) || chatData.response || "";
-                if (!spokenText.trim()) throw new Error("AI 未返回有效回复，请换个问题试试");
-                if (spokenText.length > 300) spokenText = spokenText.slice(0, 300) + "...";
-                llmBox.textContent = spokenText;
-                llmBox.classList.remove("hidden");
-                loadingText.textContent = "生成数字人视频...";
-            }
-            const form = new FormData();
-            form.append("avatar_id", selectedAvatar);
-            form.append("engine", currentEngine);
-            form.append("text", spokenText);
-            resp = await fetchWithRetry("/api/generate", { method: "POST", body: form });
+    try {
+        if (currentMode === "ai") {
+            // Step 0: AI thinking
+            loadingText.textContent = "AI 思考中...";
+            setStep(0);
+            const chatForm = new FormData();
+            chatForm.append("message", text);
+            const chatResp = await fetchWithRetry("/api/chat", { method: "POST", body: chatForm });
+            if (!chatResp.ok) throw new Error("AI 服务暂时不可用，请稍后重试");
+            const chatData = await chatResp.json();
+            const msg = chatData.message;
+            spokenText = (typeof msg === "object" ? msg.content : msg) || chatData.response || "";
+            if (!spokenText.trim()) throw new Error("AI 未返回有效回复，请换个问题试试");
+            if (spokenText.length > 300) spokenText = spokenText.slice(0, 300) + "...";
+            llmBox.textContent = spokenText;
+            llmBox.classList.remove("hidden");
         }
+
+        // Step 1: TTS
+        loadingText.textContent = "语音合成中...";
+        setStep(1);
+
+        // Small delay to show step transition visually
+        await new Promise((r) => setTimeout(r, 300));
+
+        // Step 2: Video generation (TTS + video happen server-side together)
+        loadingText.textContent = "视频生成中...";
+        setStep(2);
+
+        const form = new FormData();
+        form.append("avatar_id", selectedAvatar);
+        form.append("engine", currentEngine);
+        form.append("text", spokenText);
+        const resp = await fetchWithRetry("/api/generate", { method: "POST", body: form });
+
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
         if (!resp.ok) {
@@ -251,7 +333,10 @@ async function generate() {
         currentVideoUrl = url;
         video.src = url;
         video.classList.add("visible");
+        videoWrap.classList.add("playing");
         video.play().catch(() => {});
+
+        hasGeneratedVideo = true;
 
         timeBadge.textContent = elapsed + "s";
         timeBadge.classList.remove("hidden");
@@ -260,6 +345,7 @@ async function generate() {
         addToHistory(url, avatarData[selectedAvatar]?.name || selectedAvatar, spokenText);
 
         $("#text-input").value = "";
+        updateCharCount();
         toast("生成完成 " + elapsed + "s");
     } catch (e) {
         toast(e.message, 4000);
@@ -272,6 +358,7 @@ async function generate() {
     }
 }
 
+/* ── Health check ── */
 async function checkHealth() {
     try {
         const r = await fetch("/api/health");
@@ -293,7 +380,7 @@ async function checkHealth() {
     }
 }
 
-// Tabs
+/* ── Tabs ── */
 $$(".tab").forEach((btn) => {
     btn.addEventListener("click", () => {
         $$(".tab").forEach((b) => b.classList.remove("active"));
@@ -303,7 +390,6 @@ $$(".tab").forEach((btn) => {
         const placeholders = {
             direct: "输入要说的话...（Enter 发送）",
             ai: "问个问题，数字人会替你回答...",
-            quick: "输入英文问题，全链路极速生成..."
         };
         input.placeholder = placeholders[currentMode] || placeholders.direct;
         $("#llm-box").classList.add("hidden");
@@ -311,7 +397,7 @@ $$(".tab").forEach((btn) => {
     });
 });
 
-// Engine
+/* ── Engine ── */
 $$(".engine-option").forEach((opt) => {
     opt.addEventListener("click", () => {
         $$(".engine-option").forEach((o) => o.classList.remove("active"));
@@ -320,7 +406,7 @@ $$(".engine-option").forEach((opt) => {
     });
 });
 
-// Upload
+/* ── Upload ── */
 $("#upload-btn").addEventListener("click", () => $("#upload-input").click());
 $("#upload-input").addEventListener("change", async (e) => {
     const file = e.target.files[0];
@@ -350,11 +436,16 @@ $("#upload-input").addEventListener("change", async (e) => {
     e.target.value = "";
 });
 
-// Textarea auto-resize
+/* ── Textarea auto-resize + char count ── */
 const ta = $("#text-input");
 ta.addEventListener("input", () => {
+    // Enforce 500 char hard limit
+    if (ta.value.length > 500) {
+        ta.value = ta.value.slice(0, 500);
+    }
     ta.style.height = "auto";
     ta.style.height = Math.min(ta.scrollHeight, 96) + "px";
+    updateCharCount();
     updateUI();
 });
 ta.addEventListener("keydown", (e) => {
@@ -365,16 +456,16 @@ ta.addEventListener("keydown", (e) => {
 });
 $("#send-btn").addEventListener("click", generate);
 
-// Voice preview
+/* ── Voice preview (in avatar info banner) ── */
 let previewAudio = null;
-const previewBtn = $("#preview-voice-btn");
-if (previewBtn) {
-    previewBtn.addEventListener("click", async () => {
-        if (!selectedAvatar || previewBtn.classList.contains("playing")) return;
+const infoPreviewBtn = $("#info-preview-btn");
+if (infoPreviewBtn) {
+    infoPreviewBtn.addEventListener("click", async () => {
+        if (!selectedAvatar || infoPreviewBtn.classList.contains("playing")) return;
         const avatar = avatarData[selectedAvatar];
         if (!avatar) return;
-        previewBtn.classList.add("playing");
-        previewBtn.textContent = "播放中...";
+        infoPreviewBtn.classList.add("playing");
+        infoPreviewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg> 播放中`;
         try {
             const form = new FormData();
             form.append("voice", avatar.voice);
@@ -385,22 +476,78 @@ if (previewBtn) {
             if (previewAudio) { previewAudio.pause(); URL.revokeObjectURL(previewAudio.src); }
             previewAudio = new Audio(url);
             previewAudio.onended = () => {
-                previewBtn.classList.remove("playing");
-                previewBtn.textContent = "试听声线";
+                infoPreviewBtn.classList.remove("playing");
+                infoPreviewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 试听`;
             };
             previewAudio.play().catch(() => {});
         } catch {
             toast("试听失败，请重试");
         } finally {
             if (!previewAudio || previewAudio.paused) {
-                previewBtn.classList.remove("playing");
-                previewBtn.textContent = "试听声线";
+                infoPreviewBtn.classList.remove("playing");
+                infoPreviewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 试听`;
             }
         }
     });
 }
 
-// History management
+/* ── Scene templates ── */
+$$(".scene-card").forEach((card) => {
+    card.addEventListener("click", () => {
+        const sceneKey = card.dataset.scene;
+        const cfg = SCENE_CONFIGS[sceneKey];
+        if (!cfg) return;
+
+        // Switch mode if needed
+        if (cfg.mode !== currentMode) {
+            currentMode = cfg.mode;
+            $$(".tab").forEach((b) => {
+                b.classList.remove("active");
+                if (b.dataset.mode === cfg.mode) b.classList.add("active");
+            });
+            const placeholders = {
+                direct: "输入要说的话...（Enter 发送）",
+                ai: "问个问题，数字人会替你回答...",
+            };
+            $("#text-input").placeholder = placeholders[cfg.mode] || placeholders.direct;
+        }
+
+        // Select avatar
+        selectAvatar(cfg.avatarId);
+
+        // Fill text
+        $("#text-input").value = cfg.text;
+        updateCharCount();
+        updateUI();
+        $("#text-input").focus();
+
+        toast(`已选择「${card.querySelector(".scene-title").textContent}」场景，点击生成即可`);
+
+        // On mobile, close sidebar if open
+        if (window.innerWidth < 768) {
+            const sidebar = $("#sidebar");
+            const overlay = $("#sidebar-overlay");
+            sidebar.classList.remove("open");
+            overlay.classList.remove("open");
+        }
+    });
+});
+
+/* ── Video playback state tracking ── */
+const videoEl = $("#video-player");
+if (videoEl) {
+    videoEl.addEventListener("playing", () => {
+        $("#video-wrap").classList.add("playing");
+    });
+    videoEl.addEventListener("pause", () => {
+        $("#video-wrap").classList.remove("playing");
+    });
+    videoEl.addEventListener("ended", () => {
+        $("#video-wrap").classList.remove("playing");
+    });
+}
+
+/* ── History management ── */
 function addToHistory(url, characterName, text) {
     videoHistory.unshift({
         url,
@@ -425,7 +572,7 @@ function renderHistory() {
     }
     panel.classList.remove("hidden");
     list.innerHTML = "";
-    videoHistory.forEach((item, idx) => {
+    videoHistory.forEach((item) => {
         const el = document.createElement("div");
         el.className = "history-item" + (item.url === currentVideoUrl ? " active" : "");
         el.innerHTML = `
@@ -448,7 +595,7 @@ function renderHistory() {
     });
 }
 
-// Download button
+/* ── Download button ── */
 $("#download-btn").addEventListener("click", () => {
     if (!currentVideoUrl) return;
     const a = document.createElement("a");
@@ -461,7 +608,7 @@ $("#download-btn").addEventListener("click", () => {
     document.body.removeChild(a);
 });
 
-// Hamburger menu (mobile)
+/* ── Hamburger menu (mobile) ── */
 (() => {
     const hamburger = $("#hamburger");
     const sidebar = $("#sidebar");
@@ -482,7 +629,6 @@ $("#download-btn").addEventListener("click", () => {
     });
     overlay.addEventListener("click", closeSidebar);
 
-    // Close sidebar when avatar is selected (mobile convenience)
     document.addEventListener("click", (e) => {
         if (e.target.closest(".avatar-card") && window.innerWidth < 768) {
             setTimeout(closeSidebar, 150);
@@ -490,12 +636,13 @@ $("#download-btn").addEventListener("click", () => {
     });
 })();
 
-// Init
+/* ── Init ── */
 (async () => {
     await loadVoices();
     await loadCategories();
     await loadAvatars();
     checkHealth();
+    updateCharCount();
     updateUI();
     setInterval(checkHealth, 30000);
 })();
