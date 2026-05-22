@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数字人直播</title>
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="style.css?v=20">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -27,6 +27,19 @@
             <div class="section-label">选择角色</div>
             <div id="category-filter" class="category-filter"></div>
             <div id="avatar-list" class="avatar-grid"></div>
+        </div>
+
+        <div id="avatar-info" class="avatar-info hidden">
+            <img id="info-avatar-img" class="avatar-info-img" src="" alt="">
+            <div class="avatar-info-detail">
+                <div class="avatar-info-name" id="info-avatar-name"></div>
+                <div class="avatar-info-desc" id="info-avatar-desc"></div>
+                <div class="avatar-info-voice" id="info-avatar-voice"></div>
+            </div>
+            <button id="info-preview-btn" class="info-preview-btn" title="试听声线">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                试听
+            </button>
         </div>
 
         <button id="upload-btn" class="upload-btn">+ 上传自定义角色</button>
@@ -56,23 +69,63 @@
 
     <main class="main">
         <div class="tabs">
-            <button class="tab active" data-mode="direct">自由输入</button>
-            <button class="tab" data-mode="ai">AI 对话</button>
-            <button class="tab" data-mode="quick">极速演示</button>
-            <button id="preview-voice-btn" class="preview-btn" title="试听当前角色声线" disabled>试听声线</button>
+            <button class="tab active" data-mode="direct">
+                <span class="tab-title">让 TA 说</span>
+                <span class="tab-sub">输入文字，数字人为你朗读</span>
+            </button>
+            <button class="tab" data-mode="ai">
+                <span class="tab-title">问 TA</span>
+                <span class="tab-sub">提问题，AI 回答并说出来</span>
+            </button>
         </div>
 
         <div class="stage">
-            <div class="video-wrap">
+            <div class="video-wrap" id="video-wrap">
                 <video id="video-player" controls autoplay playsinline></video>
                 <div id="placeholder" class="placeholder">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
-                    <p>选择一个角色，输入文字</p>
-                    <p class="sub">数字人会开口说话</p>
+                    <div id="scene-templates" class="scene-templates">
+                        <div class="scene-card" data-scene="news">
+                            <div class="scene-icon">📺</div>
+                            <div class="scene-title">新闻播报</div>
+                            <div class="scene-desc">专业主播带你看新闻</div>
+                        </div>
+                        <div class="scene-card" data-scene="teach">
+                            <div class="scene-icon">📖</div>
+                            <div class="scene-title">课堂教学</div>
+                            <div class="scene-desc">教授讲解知识要点</div>
+                        </div>
+                        <div class="scene-card" data-scene="health">
+                            <div class="scene-icon">🩺</div>
+                            <div class="scene-title">健康科普</div>
+                            <div class="scene-desc">医生普及健康常识</div>
+                        </div>
+                        <div class="scene-card" data-scene="story">
+                            <div class="scene-icon">🌙</div>
+                            <div class="scene-title">故事时间</div>
+                            <div class="scene-desc">奶奶讲暖心故事</div>
+                        </div>
+                        <div class="scene-card" data-scene="cook">
+                            <div class="scene-icon">🍳</div>
+                            <div class="scene-title">美食教程</div>
+                            <div class="scene-desc">大厨教你家常菜</div>
+                        </div>
+                        <div class="scene-card" data-scene="ai">
+                            <div class="scene-icon">🤖</div>
+                            <div class="scene-title">AI 问答</div>
+                            <div class="scene-desc">工程师为你解答疑惑</div>
+                        </div>
+                    </div>
                 </div>
                 <div id="loading" class="loading hidden">
-                    <div class="pulse"></div>
+                    <div class="step-progress" id="step-progress">
+                        <div class="step-dot active" id="step-dot-0"></div>
+                        <div class="step-line" id="step-line-0"></div>
+                        <div class="step-dot" id="step-dot-1"></div>
+                        <div class="step-line" id="step-line-1"></div>
+                        <div class="step-dot" id="step-dot-2"></div>
+                    </div>
                     <p id="loading-text">生成中...</p>
+                    <p id="loading-timer" class="loading-timer"></p>
                 </div>
                 <span id="time-badge" class="badge hidden"></span>
                 <button id="download-btn" class="download-btn hidden" title="下载视频">
@@ -94,7 +147,10 @@
         </div>
 
         <div class="input-bar">
-            <textarea id="text-input" placeholder="输入要说的话...（Enter 发送）" rows="1"></textarea>
+            <div class="input-wrap">
+                <textarea id="text-input" placeholder="输入要说的话...（Enter 发送）" rows="1" maxlength="500"></textarea>
+                <span id="char-count" class="char-count">0/300</span>
+            </div>
             <button id="send-btn" disabled>请先选角色</button>
         </div>
     </main>
@@ -102,6 +158,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script src="app.js?v=16"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
