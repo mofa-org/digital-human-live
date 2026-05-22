@@ -243,6 +243,71 @@ async def delete_avatar(avatar_id: str):
     return {"ok": True}
 
 
+KOKORO_VOICE_MAP = {
+    "onyx": "am_onyx", "echo": "am_echo", "alloy": "af_alloy",
+    "nova": "af_nova", "shimmer": "af_heart", "fable": "am_michael",
+}
+
+
+@app.post("/api/tts-preview")
+async def tts_preview(voice: str = Form("af_heart")):
+    """Preview a Kokoro voice with a fixed English phrase."""
+    kokoro_voice = KOKORO_VOICE_MAP.get(voice, voice)
+    resp = await dh_client.post(
+        f"{DH_API}/api/tts",
+        data={"text": "Hello, nice to meet you. I am your digital human assistant.", "voice": kokoro_voice},
+    )
+    if resp.status_code != 200:
+        raise HTTPException(502, "TTS preview failed")
+    return Response(content=resp.content, media_type="audio/wav",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.post("/api/quick-talk")
+async def quick_talk(
+    message: str = Form(...),
+    avatar_id: str = Form(...),
+    engine: str = Form("sadtalker"),
+):
+    """Fast path: uses Osaka /api/talk for full LLM→TTS→video pipeline (English output)."""
+    image_path = None
+    p = _find_preset(avatar_id)
+    if p:
+        image_path = AVATARS_DIR / p["file"]
+    else:
+        meta = _load_meta()
+        if avatar_id in meta:
+            image_path = UPLOADS_DIR / meta[avatar_id]["file"]
+    if not image_path or not image_path.exists():
+        raise HTTPException(404, "角色不存在")
+
+    try:
+        with open(image_path, "rb") as img_f:
+            resp = await dh_client.post(
+                f"{DH_API}/api/talk",
+                files={"image": (image_path.name, img_f, "image/png")},
+                data={"message": message, "engine": engine, "voice": "am_adam"},
+            )
+        if resp.status_code != 200:
+            raise Exception(f"HTTP {resp.status_code}")
+    except Exception:
+        raise HTTPException(503, "极速模式暂不可用，请切换到「AI 对话」模式")
+
+    llm_text = ""
+    raw_header = resp.headers.get("x-llm-response", "")
+    if raw_header:
+        try:
+            llm_text = raw_header.encode("latin-1").decode("utf-8", errors="replace")
+        except Exception:
+            llm_text = raw_header
+
+    video_bytes = await _transcode_h264(resp.content)
+    return Response(
+        content=video_bytes, media_type="video/mp4",
+        headers={"X-LLM-Response": llm_text} if llm_text else {},
+    )
+
+
 async def _openai_tts(text: str, voice: str) -> bytes:
     resp = await tts_client.post(
         OPENAI_TTS_URL,

@@ -160,11 +160,13 @@ function updateUI() {
         btn.textContent = "请先选角色";
     } else if (!text) {
         btn.disabled = true;
-        btn.textContent = currentMode === "ai" ? "请输入问题" : "请输入文字";
+        btn.textContent = currentMode === "quick" ? "请输入问题" : (currentMode === "ai" ? "请输入问题" : "请输入文字");
     } else {
         btn.disabled = false;
-        btn.textContent = currentMode === "ai" ? "提问" : "生成";
+        btn.textContent = currentMode === "quick" ? "极速生成" : (currentMode === "ai" ? "提问" : "生成");
     }
+    const previewBtn = $("#preview-voice-btn");
+    if (previewBtn) previewBtn.disabled = !selectedAvatar;
 }
 
 async function generate() {
@@ -195,30 +197,43 @@ async function generate() {
     }, 1000);
 
     try {
-        let spokenText = text;
+        let resp;
 
-        if (currentMode === "ai") {
-            loadingText.textContent = "AI 思考中...";
-            const chatForm = new FormData();
-            chatForm.append("message", text);
-            const chatResp = await fetchWithRetry("/api/chat", { method: "POST", body: chatForm });
-            if (!chatResp.ok) throw new Error("AI 服务暂时不可用，请稍后重试");
-            const chatData = await chatResp.json();
-            const msg = chatData.message;
-            spokenText = (typeof msg === "object" ? msg.content : msg) || chatData.response || "";
-            if (!spokenText.trim()) throw new Error("AI 未返回有效回复，请换个问题试试");
-            if (spokenText.length > 300) spokenText = spokenText.slice(0, 300) + "...";
-            llmBox.textContent = spokenText;
-            llmBox.classList.remove("hidden");
-            loadingText.textContent = "生成数字人视频...";
+        if (currentMode === "quick") {
+            loadingText.textContent = "极速全链路生成中...";
+            const form = new FormData();
+            form.append("message", text);
+            form.append("avatar_id", selectedAvatar);
+            form.append("engine", currentEngine);
+            resp = await fetchWithRetry("/api/quick-talk", { method: "POST", body: form });
+            const llmText = resp.headers.get("X-LLM-Response");
+            if (llmText) {
+                llmBox.textContent = llmText;
+                llmBox.classList.remove("hidden");
+            }
+        } else {
+            let spokenText = text;
+            if (currentMode === "ai") {
+                loadingText.textContent = "AI 思考中...";
+                const chatForm = new FormData();
+                chatForm.append("message", text);
+                const chatResp = await fetchWithRetry("/api/chat", { method: "POST", body: chatForm });
+                if (!chatResp.ok) throw new Error("AI 服务暂时不可用，请稍后重试");
+                const chatData = await chatResp.json();
+                const msg = chatData.message;
+                spokenText = (typeof msg === "object" ? msg.content : msg) || chatData.response || "";
+                if (!spokenText.trim()) throw new Error("AI 未返回有效回复，请换个问题试试");
+                if (spokenText.length > 300) spokenText = spokenText.slice(0, 300) + "...";
+                llmBox.textContent = spokenText;
+                llmBox.classList.remove("hidden");
+                loadingText.textContent = "生成数字人视频...";
+            }
+            const form = new FormData();
+            form.append("avatar_id", selectedAvatar);
+            form.append("engine", currentEngine);
+            form.append("text", spokenText);
+            resp = await fetchWithRetry("/api/generate", { method: "POST", body: form });
         }
-
-        const form = new FormData();
-        form.append("avatar_id", selectedAvatar);
-        form.append("engine", currentEngine);
-        form.append("text", spokenText);
-
-        const resp = await fetchWithRetry("/api/generate", { method: "POST", body: form });
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
         if (!resp.ok) {
@@ -285,9 +300,12 @@ $$(".tab").forEach((btn) => {
         btn.classList.add("active");
         currentMode = btn.dataset.mode;
         const input = $("#text-input");
-        input.placeholder = currentMode === "ai"
-            ? "问个问题，数字人会替你回答..."
-            : "输入要说的话...（Enter 发送）";
+        const placeholders = {
+            direct: "输入要说的话...（Enter 发送）",
+            ai: "问个问题，数字人会替你回答...",
+            quick: "输入英文问题，全链路极速生成..."
+        };
+        input.placeholder = placeholders[currentMode] || placeholders.direct;
         $("#llm-box").classList.add("hidden");
         updateUI();
     });
@@ -346,6 +364,41 @@ ta.addEventListener("keydown", (e) => {
     }
 });
 $("#send-btn").addEventListener("click", generate);
+
+// Voice preview
+let previewAudio = null;
+const previewBtn = $("#preview-voice-btn");
+if (previewBtn) {
+    previewBtn.addEventListener("click", async () => {
+        if (!selectedAvatar || previewBtn.classList.contains("playing")) return;
+        const avatar = avatarData[selectedAvatar];
+        if (!avatar) return;
+        previewBtn.classList.add("playing");
+        previewBtn.textContent = "播放中...";
+        try {
+            const form = new FormData();
+            form.append("voice", avatar.voice);
+            const resp = await fetch("/api/tts-preview", { method: "POST", body: form });
+            if (!resp.ok) throw new Error("试听失败");
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            if (previewAudio) { previewAudio.pause(); URL.revokeObjectURL(previewAudio.src); }
+            previewAudio = new Audio(url);
+            previewAudio.onended = () => {
+                previewBtn.classList.remove("playing");
+                previewBtn.textContent = "试听声线";
+            };
+            previewAudio.play().catch(() => {});
+        } catch {
+            toast("试听失败，请重试");
+        } finally {
+            if (!previewAudio || previewAudio.paused) {
+                previewBtn.classList.remove("playing");
+                previewBtn.textContent = "试听声线";
+            }
+        }
+    });
+}
 
 // History management
 function addToHistory(url, characterName, text) {
