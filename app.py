@@ -30,6 +30,7 @@ ANALYTICS_FILE = BASE / "analytics.log"
 _SHARE_TTL = 7 * 24 * 3600  # 7 days
 
 DH_API = "http://154.17.17.154:18801"
+DH_API_KEY = os.environ.get("DH_API_KEY", "osk-liyao2026")
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
 
@@ -169,7 +170,10 @@ tts_client: httpx.AsyncClient = None  # type: ignore[assignment]
 @app.on_event("startup")
 async def _startup():
     global dh_client, tts_client
-    dh_client = httpx.AsyncClient(timeout=httpx.Timeout(300.0))
+    dh_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(300.0),
+        headers={"X-API-Key": DH_API_KEY},
+    )
     tts_client = httpx.AsyncClient(timeout=60.0)
 
 
