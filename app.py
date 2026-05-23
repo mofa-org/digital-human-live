@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 import imageio_ffmpeg
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
@@ -26,6 +26,7 @@ SHARED_DIR = BASE / "shared"
 SHARED_DIR.mkdir(exist_ok=True)
 META_FILE = UPLOADS_DIR / "metadata.json"
 STATS_FILE = BASE / "stats.json"
+ANALYTICS_FILE = BASE / "analytics.log"
 _SHARE_TTL = 7 * 24 * 3600  # 7 days
 
 DH_API = "http://154.17.17.154:18801"
@@ -783,6 +784,33 @@ async def get_stats():
         "generations_today": stats.get("generations_today", {}).get(today, 0),
         "character_usage": stats.get("character_usage", {}),
     }
+
+
+@app.post("/api/analytics")
+async def receive_analytics(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+    event = body.get("event", "")
+    if not event:
+        raise HTTPException(400, "Missing event field")
+    line = json.dumps({
+        "event": event,
+        "data": body.get("data", {}),
+        "timestamp": body.get("timestamp", time.time()),
+    }, ensure_ascii=False)
+    # Append to analytics log
+    with open(ANALYTICS_FILE, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+    # Truncate if > 10MB: keep last 5MB
+    try:
+        if ANALYTICS_FILE.exists() and ANALYTICS_FILE.stat().st_size > 10 * 1024 * 1024:
+            data = ANALYTICS_FILE.read_bytes()
+            ANALYTICS_FILE.write_bytes(data[-(5 * 1024 * 1024):])
+    except OSError:
+        pass
+    return {"ok": True}
 
 
 class NoCacheStaticMiddleware(BaseHTTPMiddleware):

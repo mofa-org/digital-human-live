@@ -18,6 +18,28 @@ async function fetchWithRetry(url, options = {}) {
     }
 }
 
+/* ── Analytics tracking (fire-and-forget) ── */
+function trackEvent(event, data = {}) {
+    const payload = JSON.stringify({ event, data, timestamp: Date.now() / 1000 });
+    try {
+        fetch("/api/analytics", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+            keepalive: true,
+        }).catch(() => {});
+    } catch {}
+}
+// Track page view on load
+trackEvent("page_view");
+// Track page view on unload via sendBeacon
+window.addEventListener("beforeunload", () => {
+    const payload = JSON.stringify({ event: "page_view", data: { type: "unload" }, timestamp: Date.now() / 1000 });
+    if (navigator.sendBeacon) {
+        navigator.sendBeacon("/api/analytics", new Blob([payload], { type: "application/json" }));
+    }
+});
+
 let selectedAvatar = null;
 let avatarData = {};
 let allAvatars = [];
@@ -127,6 +149,7 @@ function renderAvatars() {
 /* ── Select avatar (shared logic) ── */
 function selectAvatar(avatarId) {
     selectedAvatar = avatarId;
+    trackEvent("avatar_select", { avatar_id: avatarId });
     $$(".avatar-card").forEach((c) => c.classList.remove("active"));
     // Find and activate the matching card
     const cards = $$(".avatar-card");
@@ -256,6 +279,7 @@ async function generate() {
     if (!text) return;
 
     generating = true;
+    trackEvent("generate_start", { avatar_id: selectedAvatar, mode: currentMode, engine: currentEngine });
     updateUI();
 
     const loading = $("#loading");
@@ -380,8 +404,10 @@ async function generate() {
         $("#text-input").value = "";
         updateCharCount();
         toast("生成完成 " + elapsed + "s");
+        trackEvent("generate_complete", { avatar_id: selectedAvatar, elapsed_seconds: parseFloat(elapsed) });
     } catch (e) {
         toast(e.message, 4000);
+        trackEvent("generate_error", { error_message: e.message });
         if (!video.classList.contains("visible")) placeholder.classList.remove("hidden");
     } finally {
         clearInterval(timer);
@@ -419,6 +445,7 @@ $$(".tab").forEach((btn) => {
         $$(".tab").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         currentMode = btn.dataset.mode;
+        trackEvent("mode_switch", { mode: currentMode });
         const input = $("#text-input");
         const placeholders = {
             direct: "输入要说的话...（Enter 发送）",
@@ -724,6 +751,7 @@ document.addEventListener("fullscreenchange", () => {
 /* ── Download button ── */
 $("#download-btn").addEventListener("click", () => {
     if (!currentVideoUrl) return;
+    trackEvent("download_click");
     const a = document.createElement("a");
     a.href = currentVideoUrl;
     const name = avatarData[selectedAvatar]?.name || "digital-human";
@@ -737,6 +765,7 @@ $("#download-btn").addEventListener("click", () => {
 /* ── Share button ── */
 $("#share-btn").addEventListener("click", async () => {
     if (!currentVideoBlob) return;
+    trackEvent("share_click");
     const btn = $("#share-btn");
     btn.disabled = true;
     try {
