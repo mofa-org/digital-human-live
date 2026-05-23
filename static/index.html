@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数字人直播</title>
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="stylesheet" href="style.css?v=21">
+    <link rel="stylesheet" href="style.css?v=22">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -133,7 +133,10 @@
                 </button>
             </div>
 
-            <div id="llm-box" class="llm-box hidden"></div>
+            <div id="llm-box" class="llm-box hidden">
+                <div id="chat-history" class="chat-history"></div>
+                <button id="clear-chat-btn" class="clear-chat-btn hidden">清除对话</button>
+            </div>
 
             <div id="samples" class="samples hidden">
                 <div class="samples-label" id="samples-label">推荐台词</div>
@@ -163,6 +166,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script src="app.js?v=21"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

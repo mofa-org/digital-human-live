@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -26,6 +27,20 @@ META_FILE = UPLOADS_DIR / "metadata.json"
 DH_API = "http://154.17.17.154:18801"
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+# ── In-memory conversation store ──
+# { session_id: { "messages": [...], "updated": timestamp } }
+_chat_sessions: dict = {}
+_SESSION_TTL = 30 * 60  # 30 minutes
+
+
+def _cleanup_sessions():
+    """Remove sessions older than 30 minutes."""
+    now = time.time()
+    expired = [k for k, v in _chat_sessions.items() if now - v["updated"] > _SESSION_TTL]
+    for k in expired:
+        del _chat_sessions[k]
+
 
 CATEGORIES = ["医疗健康", "教育", "文化艺术", "劳动者", "商务科技", "生活"]
 
@@ -320,13 +335,46 @@ async def _openai_tts(text: str, voice: str) -> bytes:
 
 
 @app.post("/api/chat")
-async def chat_proxy(message: str = Form(...)):
+async def chat_proxy(message: str = Form(...), session_id: str = Form("")):
+    _cleanup_sessions()
+
+    # Build conversation history if session_id provided
+    history = []
+    if session_id:
+        if session_id not in _chat_sessions:
+            _chat_sessions[session_id] = {"messages": [], "updated": time.time()}
+        session = _chat_sessions[session_id]
+        session["messages"].append({"role": "user", "content": message})
+        history = session["messages"].copy()
+
     resp = await dh_client.post(
         f"{DH_API}/api/chat", data={"message": message, "model": "qwen3.6:27b"},
     )
     if resp.status_code != 200:
         raise HTTPException(502, f"LLM错误: {resp.text}")
-    return resp.json()
+    data = resp.json()
+
+    # Extract assistant reply and save to session
+    msg = data.get("message", {})
+    reply = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+    if not reply:
+        reply = data.get("response", str(data))
+
+    if session_id and session_id in _chat_sessions:
+        _chat_sessions[session_id]["messages"].append({"role": "assistant", "content": reply})
+        _chat_sessions[session_id]["updated"] = time.time()
+        # Keep history reasonable (last 20 messages)
+        if len(_chat_sessions[session_id]["messages"]) > 20:
+            _chat_sessions[session_id]["messages"] = _chat_sessions[session_id]["messages"][-20:]
+
+    return data
+
+
+@app.delete("/api/chat/session/{session_id}")
+async def clear_session(session_id: str):
+    if session_id in _chat_sessions:
+        del _chat_sessions[session_id]
+    return {"ok": True}
 
 
 def _write_srt(text: str, duration: float = 30.0) -> Path:
