@@ -329,30 +329,98 @@ async def chat_proxy(message: str = Form(...)):
     return resp.json()
 
 
-async def _transcode_h264(raw_video: bytes) -> bytes:
+def _write_srt(text: str, duration: float = 30.0) -> Path:
+    """Write spoken text as a single-entry SRT subtitle file."""
+    srt_path = Path(tempfile.mktemp(suffix=".srt"))
+    # Split long text into ~20-char lines for readability
+    lines = []
+    while text:
+        if len(text) <= 20:
+            lines.append(text)
+            break
+        cut = text.rfind("，", 0, 20)
+        if cut == -1:
+            cut = text.rfind("。", 0, 20)
+        if cut == -1:
+            cut = 20
+        else:
+            cut += 1
+        lines.append(text[:cut])
+        text = text[cut:]
+    srt_content = f"1\n00:00:00,000 --> 00:{int(duration)//60:02d}:{int(duration)%60:02d},000\n" + "\n".join(lines) + "\n"
+    srt_path.write_text(srt_content, encoding="utf-8")
+    return srt_path
+
+
+async def _transcode_h264(raw_video: bytes, subtitle_text: str = "") -> bytes:
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as src, \
          tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as dst:
         src.write(raw_video)
         src_path, dst_path = Path(src.name), Path(dst.name)
+    srt_path = None
     try:
+        vf_filters = []
+        if subtitle_text:
+            srt_path = _write_srt(subtitle_text)
+            # Escape path for ffmpeg filter (backslashes, colons)
+            escaped = str(srt_path).replace("\\", "\\\\").replace(":", "\\:")
+            vf_filters.append(
+                f"subtitles={escaped}:force_style='FontSize=18,PrimaryColour=&H00FFFFFF,"
+                f"OutlineColour=&H00000000,Outline=2,FontName=Noto Sans SC'"
+            )
+
+        cmd = [FFMPEG, "-y", "-i", str(src_path)]
+        if vf_filters:
+            cmd += ["-vf", ",".join(vf_filters)]
+        cmd += ["-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-c:a", "aac", "-movflags", "+faststart", str(dst_path)]
+
         proc = await asyncio.create_subprocess_exec(
-            FFMPEG, "-y", "-i", str(src_path),
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-c:a", "aac", "-movflags", "+faststart",
-            str(dst_path),
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
         )
-        await proc.wait()
+        _, stderr_data = await proc.communicate()
+
+        if proc.returncode != 0 and subtitle_text:
+            # Fallback: use drawtext filter if libass/subtitles filter unavailable
+            escaped_text = subtitle_text.replace("'", "\u2019").replace(":", "\\:")
+            dt_filter = (
+                f"drawtext=text='{escaped_text}':fontsize=18:fontcolor=white:"
+                f"borderw=2:bordercolor=black:x=(w-text_w)/2:y=h-th-20:"
+                f"fontfile=/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf"
+            )
+            cmd2 = [FFMPEG, "-y", "-i", str(src_path),
+                    "-vf", dt_filter,
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                    "-c:a", "aac", "-movflags", "+faststart", str(dst_path)]
+            proc2 = await asyncio.create_subprocess_exec(
+                *cmd2, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc2.wait()
+            if proc2.returncode == 0:
+                return dst_path.read_bytes()
+            # If drawtext also fails, fall back to plain transcode
+            cmd3 = [FFMPEG, "-y", "-i", str(src_path),
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                    "-c:a", "aac", "-movflags", "+faststart", str(dst_path)]
+            proc3 = await asyncio.create_subprocess_exec(
+                *cmd3, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc3.wait()
+            return dst_path.read_bytes() if proc3.returncode == 0 else raw_video
+
         return dst_path.read_bytes() if proc.returncode == 0 else raw_video
     finally:
         src_path.unlink(missing_ok=True)
         dst_path.unlink(missing_ok=True)
+        if srt_path:
+            srt_path.unlink(missing_ok=True)
 
 
 @app.post("/api/generate")
 async def generate(
     text: str = Form(...), avatar_id: str = Form(...),
     engine: str = Form("sadtalker"),
+    subtitles: bool = Form(False),
 ):
     image_path, voice = None, "nova"
     p = _find_preset(avatar_id)
@@ -385,7 +453,7 @@ async def generate(
         audio_path.unlink(missing_ok=True)
     if resp.status_code != 200:
         raise HTTPException(502, f"数字人API错误: {resp.text}")
-    video_bytes = await _transcode_h264(resp.content)
+    video_bytes = await _transcode_h264(resp.content, subtitle_text=text if subtitles else "")
     return Response(content=video_bytes, media_type="video/mp4")
 
 
