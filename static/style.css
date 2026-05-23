@@ -23,12 +23,31 @@
     --font: "Noto Sans SC", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
+[data-theme="dark"] {
+    --bg: #151518;
+    --bg-card: #1e1e22;
+    --bg-sidebar: #1a1a1e;
+    --bg-stage-top: #18181c;
+    --bg-stage-bottom: #121215;
+    --text: #e0ddd8;
+    --text2: #9a9590;
+    --text3: #6a655f;
+    --accent: #c47d4e;
+    --accent-light: #2e2218;
+    --accent2: #6b8fd7;
+    --border: #2e2e33;
+    --shadow: 0 1px 3px rgba(0,0,0,0.2);
+    --shadow2: 0 4px 12px rgba(0,0,0,0.25);
+    --shadow3: 0 8px 24px rgba(0,0,0,0.3);
+}
+
 body {
     font-family: var(--font);
     background: var(--bg);
     color: var(--text);
     height: 100vh;
     overflow: hidden;
+    transition: background-color 0.3s, color 0.3s;
 }
 
 .app { display: flex; height: 100vh; }
@@ -335,6 +354,32 @@ body {
 }
 .tab.active .tab-title { color: var(--accent); }
 .tab.active .tab-sub { color: var(--accent); opacity: 0.7; }
+
+/* ── Theme toggle ── */
+.theme-toggle {
+    margin-left: auto;
+    align-self: center;
+    width: 36px; height: 36px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center; justify-content: center;
+    color: var(--text2);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+.theme-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.theme-icon-moon { display: none; }
+[data-theme="dark"] .theme-icon-sun { display: none; }
+[data-theme="dark"] .theme-icon-moon { display: block; }
+[data-theme="dark"] .scene-card { background: linear-gradient(135deg, #222228 0%, #1c1c20 100%); }
+[data-theme="dark"] .loading { background: rgba(21,21,24,0.88); }
+[data-theme="dark"] .input-bar { background: rgba(26,26,30,0.8); }
 
 /* ── Stage ── */
 .stage {
