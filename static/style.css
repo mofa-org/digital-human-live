@@ -449,6 +449,26 @@ body {
 }
 .badge.hidden { display: none; }
 
+/* ── Share button ── */
+.share-btn {
+    position: absolute;
+    bottom: 10px; right: 54px;
+    width: 36px; height: 36px;
+    background: var(--accent2);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center; justify-content: center;
+    box-shadow: var(--shadow2);
+    z-index: 5;
+    transition: all 0.2s ease;
+}
+.share-btn:hover { background: #4a6db5; transform: scale(1.08); }
+.share-btn.hidden { display: none; }
+.share-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* ── Download button ── */
 .download-btn {
     position: absolute;

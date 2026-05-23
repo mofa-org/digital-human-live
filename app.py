@@ -22,7 +22,10 @@ UPLOADS_DIR = BASE / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 THUMBNAILS_DIR = BASE / "thumbnails"
 THUMBNAILS_DIR.mkdir(exist_ok=True)
+SHARED_DIR = BASE / "shared"
+SHARED_DIR.mkdir(exist_ok=True)
 META_FILE = UPLOADS_DIR / "metadata.json"
+_SHARE_TTL = 7 * 24 * 3600  # 7 days
 
 DH_API = "http://154.17.17.154:18801"
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
@@ -680,6 +683,40 @@ async def ai_talk(
         content=video_bytes, media_type="video/mp4",
         headers={"X-LLM-Response": llm_text},
     )
+
+
+def _cleanup_shared():
+    """Lazy cleanup: remove shared files older than 7 days."""
+    now = time.time()
+    for f in SHARED_DIR.iterdir():
+        if f.is_file() and (now - f.stat().st_mtime) > _SHARE_TTL:
+            f.unlink(missing_ok=True)
+
+
+@app.post("/api/share")
+async def share_video(video: UploadFile = File(...)):
+    _cleanup_shared()
+    share_id = uuid.uuid4().hex[:10]
+    path = SHARED_DIR / f"{share_id}.mp4"
+    data = await video.read()
+    if len(data) < 500:
+        raise HTTPException(400, "视频文件无效")
+    if len(data) > 50 * 1024 * 1024:
+        raise HTTPException(400, "视频文件过大（最大50MB）")
+    path.write_bytes(data)
+    return {"share_id": share_id}
+
+
+@app.get("/api/shared/{share_id}")
+async def get_shared_video(share_id: str):
+    _cleanup_shared()
+    # Sanitize share_id to prevent path traversal
+    safe_id = "".join(c for c in share_id if c.isalnum())
+    path = SHARED_DIR / f"{safe_id}.mp4"
+    if not path.exists():
+        raise HTTPException(404, "分享链接已过期或不存在")
+    return FileResponse(path, media_type="video/mp4",
+                        headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api/services")

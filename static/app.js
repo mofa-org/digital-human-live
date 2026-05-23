@@ -26,6 +26,7 @@ let currentMode = "direct";
 let currentEngine = "sadtalker";
 let currentCategory = null;
 let currentVideoUrl = null;
+let currentVideoBlob = null;
 let videoHistory = [];
 const MAX_HISTORY = 5;
 let voiceLabels = {};
@@ -271,6 +272,7 @@ async function generate() {
     llmBox.classList.add("hidden");
     timeBadge.classList.add("hidden");
     $("#download-btn").classList.add("hidden");
+    $("#share-btn").classList.add("hidden");
 
     // Reset steps
     setStep(0);
@@ -368,6 +370,8 @@ async function generate() {
         timeBadge.textContent = elapsed + "s";
         timeBadge.classList.remove("hidden");
         $("#download-btn").classList.remove("hidden");
+        $("#share-btn").classList.remove("hidden");
+        currentVideoBlob = blob;
 
         addToHistory(url, avatarData[selectedAvatar]?.name || selectedAvatar, spokenText);
 
@@ -651,6 +655,32 @@ $("#download-btn").addEventListener("click", () => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+});
+
+/* ── Share button ── */
+$("#share-btn").addEventListener("click", async () => {
+    if (!currentVideoBlob) return;
+    const btn = $("#share-btn");
+    btn.disabled = true;
+    try {
+        const form = new FormData();
+        form.append("video", currentVideoBlob, "video.mp4");
+        const resp = await fetchWithRetry("/api/share", { method: "POST", body: form });
+        if (!resp.ok) throw new Error("分享失败");
+        const data = await resp.json();
+        const shareUrl = `${location.origin}/api/shared/${data.share_id}`;
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            toast("链接已复制");
+        } catch {
+            // Fallback: prompt
+            prompt("复制此链接分享:", shareUrl);
+        }
+    } catch (e) {
+        toast(e.message || "分享失败", 3000);
+    } finally {
+        btn.disabled = false;
+    }
 });
 
 /* ── Hamburger menu (mobile) ── */
