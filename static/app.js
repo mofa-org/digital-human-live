@@ -30,6 +30,8 @@ let videoHistory = [];
 const MAX_HISTORY = 5;
 let voiceLabels = {};
 let hasGeneratedVideo = false;
+let sessionId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+let chatMessages = [];  // local copy of conversation
 
 /* ── Scene template configs ── */
 const SCENE_CONFIGS = {
@@ -288,6 +290,7 @@ async function generate() {
             setStep(0);
             const chatForm = new FormData();
             chatForm.append("message", text);
+            chatForm.append("session_id", sessionId);
             const chatResp = await fetchWithRetry("/api/chat", { method: "POST", body: chatForm });
             if (!chatResp.ok) throw new Error("AI 服务暂时不可用，请稍后重试");
             const chatData = await chatResp.json();
@@ -295,7 +298,11 @@ async function generate() {
             spokenText = (typeof msg === "object" ? msg.content : msg) || chatData.response || "";
             if (!spokenText.trim()) throw new Error("AI 未返回有效回复，请换个问题试试");
             if (spokenText.length > 300) spokenText = spokenText.slice(0, 300) + "...";
-            llmBox.textContent = spokenText;
+
+            // Add to local chat history and render
+            chatMessages.push({ role: "user", content: text });
+            chatMessages.push({ role: "ai", content: spokenText });
+            renderChatHistory();
             llmBox.classList.remove("hidden");
         }
 
@@ -637,6 +644,36 @@ $("#download-btn").addEventListener("click", () => {
         }
     });
 })();
+
+/* ── Chat history ── */
+function renderChatHistory() {
+    const container = $("#chat-history");
+    const clearBtn = $("#clear-chat-btn");
+    if (!container) return;
+    container.innerHTML = "";
+    chatMessages.forEach((m) => {
+        const bubble = document.createElement("div");
+        bubble.className = "chat-bubble " + (m.role === "user" ? "user" : "ai");
+        bubble.textContent = m.content;
+        container.appendChild(bubble);
+    });
+    container.scrollTop = container.scrollHeight;
+    if (clearBtn) clearBtn.classList.toggle("hidden", chatMessages.length === 0);
+}
+
+const clearChatBtn = $("#clear-chat-btn");
+if (clearChatBtn) {
+    clearChatBtn.addEventListener("click", async () => {
+        chatMessages = [];
+        renderChatHistory();
+        $("#llm-box").classList.add("hidden");
+        try {
+            await fetch(`/api/chat/session/${sessionId}`, { method: "DELETE" });
+        } catch {}
+        sessionId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+        toast("对话已清除");
+    });
+}
 
 /* ── Init ── */
 (async () => {
