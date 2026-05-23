@@ -313,17 +313,35 @@ async function generate() {
         // Small delay to show step transition visually
         await new Promise((r) => setTimeout(r, 300));
 
-        // Step 2: Video generation (TTS + video happen server-side together)
-        loadingText.textContent = "视频生成中...";
-        setStep(2);
-
-        const form = new FormData();
-        form.append("avatar_id", selectedAvatar);
-        form.append("engine", currentEngine);
-        form.append("text", spokenText);
+        // Step 2: Video generation
+        const multiSegOn = $("#multi-seg-check")?.checked || false;
         const subtitleOn = $("#subtitle-check")?.checked || false;
-        if (subtitleOn) form.append("subtitles", "true");
-        const resp = await fetchWithRetry("/api/generate", { method: "POST", body: form });
+
+        let resp;
+        if (multiSegOn && currentMode === "direct") {
+            // Multi-segment mode: split by newlines
+            const segments = spokenText.split(/\n+/).map(s => s.trim()).filter(s => s);
+            if (segments.length === 0) throw new Error("没有有效的文本段落");
+            loadingText.textContent = `多段生成中 (共${segments.length}段)...`;
+            setStep(2);
+
+            const form = new FormData();
+            form.append("segments", JSON.stringify(segments));
+            form.append("avatar_id", selectedAvatar);
+            form.append("engine", currentEngine);
+            if (subtitleOn) form.append("subtitles", "true");
+            resp = await fetchWithRetry("/api/generate-multi", { method: "POST", body: form });
+        } else {
+            loadingText.textContent = "视频生成中...";
+            setStep(2);
+
+            const form = new FormData();
+            form.append("avatar_id", selectedAvatar);
+            form.append("engine", currentEngine);
+            form.append("text", spokenText);
+            if (subtitleOn) form.append("subtitles", "true");
+            resp = await fetchWithRetry("/api/generate", { method: "POST", body: form });
+        }
 
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
@@ -445,6 +463,23 @@ $("#upload-input").addEventListener("change", async (e) => {
     e.target.value = "";
 });
 
+/* ── Multi-segment toggle ── */
+const multiSegCheck = $("#multi-seg-check");
+if (multiSegCheck) {
+    multiSegCheck.addEventListener("change", () => {
+        const ta = $("#text-input");
+        if (multiSegCheck.checked) {
+            ta.placeholder = "每行一段，回车分隔...";
+            ta.style.height = "80px";
+            ta.maxLength = 2000;
+        } else {
+            ta.placeholder = currentMode === "ai" ? "问个问题，数字人会替你回答..." : "输入要说的话...（Enter 发送）";
+            ta.style.height = "auto";
+            ta.maxLength = 500;
+        }
+    });
+}
+
 /* ── Textarea auto-resize + char count ── */
 const ta = $("#text-input");
 ta.addEventListener("input", () => {
@@ -458,7 +493,8 @@ ta.addEventListener("input", () => {
     updateUI();
 });
 ta.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    const multiOn = $("#multi-seg-check")?.checked || false;
+    if (e.key === "Enter" && !e.shiftKey && !multiOn) {
         e.preventDefault();
         if (!$("#send-btn").disabled) generate();
     }

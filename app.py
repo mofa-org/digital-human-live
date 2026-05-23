@@ -505,6 +505,125 @@ async def generate(
     return Response(content=video_bytes, media_type="video/mp4")
 
 
+async def _generate_single_segment(
+    text: str, image_path: Path, voice: str, engine: str, subtitles: bool,
+) -> bytes:
+    """Generate a single video segment (TTS → DH API → transcode)."""
+    audio_bytes = await _openai_tts(text, voice)
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as af:
+        af.write(audio_bytes)
+        audio_path = Path(af.name)
+    try:
+        with open(image_path, "rb") as img_f, open(audio_path, "rb") as aud_f:
+            resp = await dh_client.post(
+                f"{DH_API}/api/generate",
+                files={
+                    "image": (image_path.name, img_f, "image/png"),
+                    "audio": ("speech.mp3", aud_f, "audio/mpeg"),
+                },
+                data={"engine": engine},
+            )
+    finally:
+        audio_path.unlink(missing_ok=True)
+    if resp.status_code != 200:
+        raise HTTPException(502, f"数字人API错误: {resp.text}")
+    return await _transcode_h264(resp.content, subtitle_text=text if subtitles else "")
+
+
+async def _concat_videos(clips: list[bytes]) -> bytes:
+    """Concatenate multiple mp4 clips using ffmpeg concat demuxer."""
+    clip_paths = []
+    try:
+        for i, clip_data in enumerate(clips):
+            p = Path(tempfile.mktemp(suffix=f"_seg{i}.mp4"))
+            p.write_bytes(clip_data)
+            clip_paths.append(p)
+
+        list_path = Path(tempfile.mktemp(suffix=".txt"))
+        list_path.write_text(
+            "\n".join(f"file '{p}'" for p in clip_paths), encoding="utf-8"
+        )
+        out_path = Path(tempfile.mktemp(suffix="_merged.mp4"))
+
+        proc = await asyncio.create_subprocess_exec(
+            FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", str(list_path),
+            "-c", "copy", "-movflags", "+faststart", str(out_path),
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+
+        if proc.returncode != 0:
+            # Fallback: re-encode concat
+            proc2 = await asyncio.create_subprocess_exec(
+                FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", str(list_path),
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-c:a", "aac", "-movflags", "+faststart", str(out_path),
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc2.wait()
+
+        if out_path.exists() and out_path.stat().st_size > 0:
+            return out_path.read_bytes()
+        # Last resort: return first clip
+        return clips[0]
+    finally:
+        for p in clip_paths:
+            p.unlink(missing_ok=True)
+        if 'list_path' in dir():
+            list_path.unlink(missing_ok=True)
+        if 'out_path' in dir():
+            out_path.unlink(missing_ok=True)
+
+
+@app.post("/api/generate-multi")
+async def generate_multi(
+    segments: str = Form(...),
+    avatar_id: str = Form(...),
+    engine: str = Form("sadtalker"),
+    subtitles: bool = Form(False),
+):
+    """Generate multiple segments and concatenate into one video."""
+    try:
+        segment_list = json.loads(segments)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(400, "segments must be a JSON array of strings")
+    if not isinstance(segment_list, list) or len(segment_list) == 0:
+        raise HTTPException(400, "segments must be a non-empty array")
+    if len(segment_list) > 10:
+        raise HTTPException(400, "最多支持10段")
+
+    image_path, voice = None, "nova"
+    p = _find_preset(avatar_id)
+    if p:
+        image_path = AVATARS_DIR / p["file"]
+        voice = p["voice"]
+    else:
+        meta = _load_meta()
+        if avatar_id in meta:
+            image_path = UPLOADS_DIR / meta[avatar_id]["file"]
+            voice = meta[avatar_id].get("voice", "nova")
+    if not image_path or not image_path.exists():
+        raise HTTPException(404, "角色不存在")
+
+    clips = []
+    for seg_text in segment_list:
+        seg_text = str(seg_text).strip()
+        if not seg_text:
+            continue
+        clip_bytes = await _generate_single_segment(
+            seg_text, image_path, voice, engine, subtitles,
+        )
+        clips.append(clip_bytes)
+
+    if len(clips) == 0:
+        raise HTTPException(400, "没有有效的文本段落")
+    if len(clips) == 1:
+        return Response(content=clips[0], media_type="video/mp4")
+
+    merged = await _concat_videos(clips)
+    return Response(content=merged, media_type="video/mp4")
+
+
 @app.post("/api/ai-talk")
 async def ai_talk(
     message: str = Form(...), avatar_id: str = Form(...),
