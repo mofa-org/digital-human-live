@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数字人直播</title>
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="stylesheet" href="style.css?v=24">
+    <link rel="stylesheet" href="style.css?v=25">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -23,27 +23,32 @@
             <span>数字人直播</span>
         </div>
 
-        <div class="section">
-            <div class="section-label">选择角色</div>
-            <div id="category-filter" class="category-filter"></div>
-            <div id="avatar-list" class="avatar-grid"></div>
-        </div>
-
-        <div id="avatar-info" class="avatar-info hidden">
-            <img id="info-avatar-img" class="avatar-info-img" src="" alt="">
-            <div class="avatar-info-detail">
-                <div class="avatar-info-name" id="info-avatar-name"></div>
-                <div class="avatar-info-desc" id="info-avatar-desc"></div>
-                <div class="avatar-info-voice" id="info-avatar-voice"></div>
+        <div id="drop-zone" class="drop-zone">
+            <div class="section">
+                <div class="section-label">选择角色</div>
+                <div id="category-filter" class="category-filter"></div>
+                <div id="avatar-list" class="avatar-grid"></div>
             </div>
-            <button id="info-preview-btn" class="info-preview-btn" title="试听声线">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                试听
-            </button>
-        </div>
 
-        <button id="upload-btn" class="upload-btn">+ 上传自定义角色</button>
-        <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" hidden>
+            <div id="avatar-info" class="avatar-info hidden">
+                <img id="info-avatar-img" class="avatar-info-img" src="" alt="">
+                <div class="avatar-info-detail">
+                    <div class="avatar-info-name" id="info-avatar-name"></div>
+                    <div class="avatar-info-desc" id="info-avatar-desc"></div>
+                    <div class="avatar-info-voice" id="info-avatar-voice"></div>
+                </div>
+                <button id="info-preview-btn" class="info-preview-btn" title="试听声线">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    试听
+                </button>
+            </div>
+
+            <button id="upload-btn" class="upload-btn">+ 上传自定义角色</button>
+            <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" hidden>
+            <div class="drop-overlay" id="drop-overlay">
+                <div class="drop-overlay-text">拖拽图片到此处</div>
+            </div>
+        </div>
 
         <div class="section">
             <div class="section-label">生成引擎</div>
@@ -174,6 +179,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>
