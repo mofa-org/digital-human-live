@@ -818,6 +818,50 @@ if (clearChatBtn) {
     });
 }
 
+/* ── Keyboard shortcuts ── */
+document.addEventListener("keydown", (e) => {
+    // Ctrl+Enter or Cmd+Enter: trigger generate
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        const btn = $("#send-btn");
+        if (btn && !btn.disabled) generate();
+        return;
+    }
+    // Escape: close mobile sidebar or stop audio preview
+    if (e.key === "Escape") {
+        const sidebar = $("#sidebar");
+        if (sidebar && sidebar.classList.contains("open")) {
+            sidebar.classList.remove("open");
+            $("#sidebar-overlay").classList.remove("open");
+            return;
+        }
+        if (previewAudio && !previewAudio.paused) {
+            previewAudio.pause();
+            previewAudio.currentTime = 0;
+            const btn = $("#info-preview-btn");
+            if (btn) {
+                btn.classList.remove("playing");
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 试听';
+            }
+            return;
+        }
+    }
+});
+
+/* ── Shortcuts help toggle (click on mobile) ── */
+(() => {
+    const helpEl = $("#shortcuts-help");
+    if (!helpEl) return;
+    helpEl.addEventListener("click", () => {
+        helpEl.classList.toggle("active");
+    });
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest(".shortcuts-help")) {
+            helpEl.classList.remove("active");
+        }
+    });
+})();
+
 /* ── Init ── */
 (async () => {
     await loadVoices();

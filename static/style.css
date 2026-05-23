@@ -784,6 +784,48 @@ body {
 #send-btn:hover:not(:disabled) { background: #b06e42; transform: translateY(-1px); box-shadow: var(--shadow2); }
 #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── Shortcuts help ── */
+.shortcuts-help {
+    position: fixed;
+    bottom: 16px; right: 16px;
+    z-index: 200;
+    cursor: pointer;
+}
+.shortcuts-icon {
+    display: flex;
+    align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text2);
+    box-shadow: var(--shadow);
+    transition: all 0.2s ease;
+}
+.shortcuts-help:hover .shortcuts-icon {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.shortcuts-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 36px; right: 0;
+    background: var(--text);
+    color: var(--bg);
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    box-shadow: var(--shadow3);
+    pointer-events: none;
+}
+.shortcuts-help:hover .shortcuts-tooltip,
+.shortcuts-help.active .shortcuts-tooltip {
+    display: block;
+}
+
 /* ── Toast ── */
 .toast {
     position: fixed;
