@@ -839,6 +839,58 @@ if (clearChatBtn) {
     });
 })();
 
+/* ── Stats dashboard ── */
+(() => {
+    const statsBtn = $("#stats-btn");
+    const statsModal = $("#stats-modal");
+    const statsClose = $("#stats-close");
+    if (!statsBtn || !statsModal) return;
+
+    async function openStats() {
+        statsModal.classList.remove("hidden");
+        try {
+            const r = await fetch("/api/stats");
+            if (!r.ok) throw new Error();
+            const d = await r.json();
+            $("#stat-total").textContent = d.total_generations || 0;
+            $("#stat-today").textContent = d.generations_today || 0;
+            $("#stat-tts").textContent = d.total_tts_calls || 0;
+
+            const chars = d.character_usage || {};
+            const sorted = Object.entries(chars).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const container = $("#stats-top-chars");
+            container.innerHTML = "";
+            if (sorted.length === 0) {
+                container.innerHTML = '<div style="font-size:0.75rem;color:var(--text3)">暂无数据</div>';
+            } else {
+                const maxVal = sorted[0][1];
+                sorted.forEach(([id, count]) => {
+                    const name = avatarData[id]?.name || id;
+                    const pct = Math.max(8, (count / maxVal) * 100);
+                    const row = document.createElement("div");
+                    row.className = "stats-char-row";
+                    row.innerHTML = `
+                        <span class="stats-char-name">${name}</span>
+                        <div style="flex:2;display:flex;align-items:center">
+                            <div class="stats-char-bar" style="width:${pct}%"></div>
+                        </div>
+                        <span class="stats-char-count">${count}</span>
+                    `;
+                    container.appendChild(row);
+                });
+            }
+        } catch {
+            toast("获取统计数据失败");
+        }
+    }
+
+    statsBtn.addEventListener("click", openStats);
+    statsClose.addEventListener("click", () => statsModal.classList.add("hidden"));
+    statsModal.addEventListener("click", (e) => {
+        if (e.target === statsModal) statsModal.classList.add("hidden");
+    });
+})();
+
 /* ── Keyboard shortcuts ── */
 document.addEventListener("keydown", (e) => {
     // Ctrl+Enter or Cmd+Enter: trigger generate

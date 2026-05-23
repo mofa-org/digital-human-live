@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数字人直播</title>
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="stylesheet" href="style.css?v=28">
+    <link rel="stylesheet" href="style.css?v=29">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -69,6 +69,9 @@
         <div class="sidebar-status">
             <span id="api-status" class="dot"></span>
             <span id="api-status-text">检查服务...</span>
+            <button id="stats-btn" class="stats-btn" title="用量统计">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="8" width="4" height="13"/><rect x="17" y="4" width="4" height="17"/></svg>
+            </button>
         </div>
     </aside>
 
@@ -184,6 +187,31 @@
     </main>
 </div>
 
+<div id="stats-modal" class="stats-modal hidden">
+    <div class="stats-modal-content">
+        <button id="stats-close" class="stats-close">&times;</button>
+        <h3 class="stats-title">用量统计</h3>
+        <div class="stats-grid">
+            <div class="stats-card">
+                <div class="stats-value" id="stat-total">0</div>
+                <div class="stats-label">总生成次数</div>
+            </div>
+            <div class="stats-card">
+                <div class="stats-value" id="stat-today">0</div>
+                <div class="stats-label">今日生成</div>
+            </div>
+            <div class="stats-card">
+                <div class="stats-value" id="stat-tts">0</div>
+                <div class="stats-label">TTS 调用</div>
+            </div>
+        </div>
+        <div class="stats-section">
+            <div class="stats-section-label">热门角色 Top 5</div>
+            <div id="stats-top-chars" class="stats-top-chars"></div>
+        </div>
+    </div>
+</div>
+
 <div id="shortcuts-help" class="shortcuts-help" title="键盘快捷键">
     <span class="shortcuts-icon">?</span>
     <div class="shortcuts-tooltip">Ctrl+Enter 生成 · Esc 关闭菜单</div>
@@ -191,6 +219,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>

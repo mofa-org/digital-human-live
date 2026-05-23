@@ -25,6 +25,7 @@ THUMBNAILS_DIR.mkdir(exist_ok=True)
 SHARED_DIR = BASE / "shared"
 SHARED_DIR.mkdir(exist_ok=True)
 META_FILE = UPLOADS_DIR / "metadata.json"
+STATS_FILE = BASE / "stats.json"
 _SHARE_TTL = 7 * 24 * 3600  # 7 days
 
 DH_API = "http://154.17.17.154:18801"
@@ -43,6 +44,39 @@ def _cleanup_sessions():
     expired = [k for k, v in _chat_sessions.items() if now - v["updated"] > _SESSION_TTL]
     for k in expired:
         del _chat_sessions[k]
+
+
+def _load_stats() -> dict:
+    if STATS_FILE.exists():
+        try:
+            return json.loads(STATS_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {
+        "total_generations": 0,
+        "total_tts_calls": 0,
+        "generations_today": {},
+        "character_usage": {},
+    }
+
+
+def _save_stats(stats: dict):
+    STATS_FILE.write_text(json.dumps(stats, ensure_ascii=False, indent=2))
+
+
+def _record_generation(avatar_id: str):
+    """Increment generation counters."""
+    stats = _load_stats()
+    stats["total_generations"] = stats.get("total_generations", 0) + 1
+    stats["total_tts_calls"] = stats.get("total_tts_calls", 0) + 1
+    today = time.strftime("%Y-%m-%d")
+    if "generations_today" not in stats:
+        stats["generations_today"] = {}
+    stats["generations_today"][today] = stats["generations_today"].get(today, 0) + 1
+    if "character_usage" not in stats:
+        stats["character_usage"] = {}
+    stats["character_usage"][avatar_id] = stats["character_usage"].get(avatar_id, 0) + 1
+    _save_stats(stats)
 
 
 CATEGORIES = ["医疗健康", "教育", "文化艺术", "劳动者", "商务科技", "生活"]
@@ -505,6 +539,7 @@ async def generate(
     if resp.status_code != 200:
         raise HTTPException(502, f"数字人API错误: {resp.text}")
     video_bytes = await _transcode_h264(resp.content, subtitle_text=text if subtitles else "")
+    _record_generation(avatar_id)
     return Response(content=video_bytes, media_type="video/mp4")
 
 
@@ -620,6 +655,7 @@ async def generate_multi(
 
     if len(clips) == 0:
         raise HTTPException(400, "没有有效的文本段落")
+    _record_generation(avatar_id)
     if len(clips) == 1:
         return Response(content=clips[0], media_type="video/mp4")
 
@@ -735,6 +771,18 @@ async def health():
     except Exception:
         dh_status = {"status": "unreachable"}
     return {"status": "ok", "digital_human_api": dh_status}
+
+
+@app.get("/api/stats")
+async def get_stats():
+    stats = _load_stats()
+    today = time.strftime("%Y-%m-%d")
+    return {
+        "total_generations": stats.get("total_generations", 0),
+        "total_tts_calls": stats.get("total_tts_calls", 0),
+        "generations_today": stats.get("generations_today", {}).get(today, 0),
+        "character_usage": stats.get("character_usage", {}),
+    }
 
 
 class NoCacheStaticMiddleware(BaseHTTPMiddleware):
