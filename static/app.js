@@ -272,6 +272,7 @@ async function generate() {
     llmBox.classList.add("hidden");
     timeBadge.classList.add("hidden");
     $("#download-btn").classList.add("hidden");
+    $("#fullscreen-btn").classList.add("hidden");
     $("#share-btn").classList.add("hidden");
 
     // Reset steps
@@ -370,6 +371,7 @@ async function generate() {
         timeBadge.textContent = elapsed + "s";
         timeBadge.classList.remove("hidden");
         $("#download-btn").classList.remove("hidden");
+        $("#fullscreen-btn").classList.remove("hidden");
         $("#share-btn").classList.remove("hidden");
         currentVideoBlob = blob;
 
@@ -681,12 +683,43 @@ function renderHistory() {
             placeholder.classList.add("hidden");
             video.play().catch(() => {});
             $("#download-btn").classList.remove("hidden");
+            $("#fullscreen-btn").classList.remove("hidden");
             $$(".history-item").forEach((h) => h.classList.remove("active"));
             el.classList.add("active");
         });
         list.appendChild(el);
     });
 }
+
+/* ── Fullscreen ── */
+function toggleFullscreen() {
+    const wrap = $("#video-wrap");
+    if (!document.fullscreenElement) {
+        (wrap.requestFullscreen || wrap.webkitRequestFullscreen || wrap.msRequestFullscreen).call(wrap);
+    } else {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+    }
+}
+
+$("#fullscreen-btn").addEventListener("click", toggleFullscreen);
+$("#video-wrap").addEventListener("dblclick", (e) => {
+    // Only trigger if video is visible (has been generated)
+    if ($("#video-player").classList.contains("visible")) {
+        toggleFullscreen();
+    }
+});
+
+// Show/hide fullscreen button together with download button
+document.addEventListener("fullscreenchange", () => {
+    const btn = $("#fullscreen-btn");
+    if (document.fullscreenElement) {
+        btn.title = "退出全屏";
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    } else {
+        btn.title = "全屏播放";
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    }
+});
 
 /* ── Download button ── */
 $("#download-btn").addEventListener("click", () => {
