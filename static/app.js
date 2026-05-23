@@ -437,13 +437,16 @@ $$(".engine-option").forEach((opt) => {
     });
 });
 
-/* ── Upload ── */
-$("#upload-btn").addEventListener("click", () => $("#upload-input").click());
-$("#upload-input").addEventListener("change", async (e) => {
-    const file = e.target.files[0];
+/* ── Upload (shared logic) ── */
+async function handleAvatarUpload(file) {
     if (!file) return;
+    const validTypes = ["image/png", "image/jpeg", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+        toast("请拖入 PNG/JPEG/WebP 图片");
+        return;
+    }
     const name = prompt("给这个角色起个名字：");
-    if (!name || !name.trim()) { e.target.value = ""; return; }
+    if (!name || !name.trim()) return;
     const gender = prompt("角色性别？输入 male 或 female：", "female");
     const form = new FormData();
     form.append("name", name.trim());
@@ -464,8 +467,49 @@ $("#upload-input").addEventListener("change", async (e) => {
     } catch {
         toast("网络错误");
     }
+}
+
+$("#upload-btn").addEventListener("click", () => $("#upload-input").click());
+$("#upload-input").addEventListener("change", async (e) => {
+    await handleAvatarUpload(e.target.files[0]);
     e.target.value = "";
 });
+
+/* ── Drag & drop upload ── */
+(() => {
+    const dropZone = $("#drop-zone");
+    if (!dropZone) return;
+    let dragCounter = 0;
+
+    // Prevent default drag behaviors on the whole page
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", (e) => e.preventDefault());
+
+    dropZone.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        dragCounter++;
+        dropZone.classList.add("drag-over");
+    });
+    dropZone.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dragCounter--;
+        if (dragCounter <= 0) {
+            dragCounter = 0;
+            dropZone.classList.remove("drag-over");
+        }
+    });
+    dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+    });
+    dropZone.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        dragCounter = 0;
+        dropZone.classList.remove("drag-over");
+        const file = e.dataTransfer.files[0];
+        if (file) await handleAvatarUpload(file);
+    });
+})();
 
 /* ── Multi-segment toggle ── */
 const multiSegCheck = $("#multi-seg-check");
