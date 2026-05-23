@@ -314,6 +314,8 @@ async function generate() {
         form.append("avatar_id", selectedAvatar);
         form.append("engine", currentEngine);
         form.append("text", spokenText);
+        const subtitleOn = $("#subtitle-check")?.checked || false;
+        if (subtitleOn) form.append("subtitles", "true");
         const resp = await fetchWithRetry("/api/generate", { method: "POST", body: form });
 
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);

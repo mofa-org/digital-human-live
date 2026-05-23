@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数字人直播</title>
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="stylesheet" href="style.css?v=20">
+    <link rel="stylesheet" href="style.css?v=21">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -151,6 +151,11 @@
                 <textarea id="text-input" placeholder="输入要说的话...（Enter 发送）" rows="1" maxlength="500"></textarea>
                 <span id="char-count" class="char-count">0/300</span>
             </div>
+            <label class="subtitle-toggle" title="为视频添加字幕">
+                <input type="checkbox" id="subtitle-check">
+                <span class="subtitle-slider"></span>
+                <span class="subtitle-label">字幕</span>
+            </label>
             <button id="send-btn" disabled>请先选角色</button>
         </div>
     </main>
@@ -158,6 +163,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
