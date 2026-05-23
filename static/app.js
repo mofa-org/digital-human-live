@@ -818,6 +818,27 @@ if (clearChatBtn) {
     });
 }
 
+/* ── Dark/light theme toggle ── */
+(() => {
+    const stored = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initial = stored || (prefersDark ? "dark" : "light");
+    if (initial === "dark") document.documentElement.setAttribute("data-theme", "dark");
+
+    const toggleBtn = $("#theme-toggle");
+    if (!toggleBtn) return;
+    toggleBtn.addEventListener("click", () => {
+        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        if (isDark) {
+            document.documentElement.removeAttribute("data-theme");
+            localStorage.setItem("theme", "light");
+        } else {
+            document.documentElement.setAttribute("data-theme", "dark");
+            localStorage.setItem("theme", "dark");
+        }
+    });
+})();
+
 /* ── Keyboard shortcuts ── */
 document.addEventListener("keydown", (e) => {
     // Ctrl+Enter or Cmd+Enter: trigger generate
