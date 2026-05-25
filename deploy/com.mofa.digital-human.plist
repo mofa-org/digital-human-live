@@ -23,6 +23,8 @@
     <dict>
         <key>OPENAI_API_KEY</key>
         <string>YOUR_OPENAI_API_KEY_HERE</string>
+        <key>DH_API_KEY</key>
+        <string>YOUR_DH_API_KEY_HERE</string>
         <key>PATH</key>
         <string>/Users/mac/Library/Python/3.9/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
