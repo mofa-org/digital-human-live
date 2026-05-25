@@ -1,6 +1,11 @@
 __pycache__/
 *.pyc
+.env
 uploads/
+shared/
+stats.json
+analytics.log
+logs/
 thumbnails/
 node_modules/
 .DS_Store

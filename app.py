@@ -30,7 +30,7 @@ ANALYTICS_FILE = BASE / "analytics.log"
 _SHARE_TTL = 7 * 24 * 3600  # 7 days
 
 DH_API = "http://154.17.17.154:18801"
-DH_API_KEY = os.environ.get("DH_API_KEY", "osk-liyao2026")
+DH_API_KEY = os.environ.get("DH_API_KEY", "")
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
 
