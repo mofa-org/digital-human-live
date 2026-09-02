@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import tempfile
 import time
 import uuid
@@ -419,6 +420,20 @@ async def clear_session(session_id: str):
     return {"ok": True}
 
 
+async def _probe_duration(path: Path, default: float = 30.0) -> float:
+    """Get media duration in seconds by parsing ffmpeg's stderr banner."""
+    proc = await asyncio.create_subprocess_exec(
+        FFMPEG, "-i", str(path),
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr_data = await proc.communicate()
+    match = re.search(rb"Duration:\s*(\d+):(\d+):(\d+)\.(\d+)", stderr_data)
+    if not match:
+        return default
+    h, m, s, cs = (int(x) for x in match.groups())
+    return h * 3600 + m * 60 + s + cs / 100
+
+
 def _write_srt(text: str, duration: float = 30.0) -> Path:
     """Write spoken text as a single-entry SRT subtitle file."""
     srt_path = Path(tempfile.mktemp(suffix=".srt"))
@@ -451,7 +466,8 @@ async def _transcode_h264(raw_video: bytes, subtitle_text: str = "") -> bytes:
     try:
         vf_filters = []
         if subtitle_text:
-            srt_path = _write_srt(subtitle_text)
+            duration = await _probe_duration(src_path)
+            srt_path = _write_srt(subtitle_text, duration=duration)
             # Escape path for ffmpeg filter (backslashes, colons)
             escaped = str(srt_path).replace("\\", "\\\\").replace(":", "\\:")
             vf_filters.append(
